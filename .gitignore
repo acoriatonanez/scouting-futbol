@@ -1,0 +1,30 @@
+# === DATOS CRUDOS (demasiado pesados para GitHub) ===
+data/raw/
+*.json
+*.csv
+
+# === OUTPUTS DEL PIPELINE (se regeneran) ===
+data/processed/
+
+# === ENTORNO VIRTUAL PYTHON ===
+venv/
+entornos/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# === POWER BI ===
+*.pbix
+*.pbit
+
+# === SISTEMA ===
+.DS_Store
+Thumbs.db
+*.tmp
+
+# === JUPYTER ===
+.ipynb_checkpoints/
+
+# === OUTPUTS LOCALES DEL PIPELINE ===
+output/
