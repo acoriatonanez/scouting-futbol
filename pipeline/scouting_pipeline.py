@@ -1,6 +1,6 @@
 """
 ========================================================
-  PIPELINE DE SCOUTING V5 - CORREGIDO
+  PIPELINE DE SCOUTING V7
   StatsBomb open-data + Transfermarkt Kaggle
 
   Entorno: La Liga | 2014/15, 2015/16, 2016/17
@@ -20,6 +20,24 @@
     8. Filtros robustos ante columnas/archivos faltantes.
     9. EDA robusto ante perfiles vacios o con pocos datos.
    10. Sin dependencia de numero de camiseta.
+
+  Cambios v6 (EDA orientado a criterios para DAX):
+   11. DEFENSOR: reemplaza despejes_aereos (datos insuficientes + perfil incorrecto)
+       por carrys_progresivos_zona_media como proxy de "correccion a campo abierto".
+   12. SCATTER INTERACTIVO: el grafico de dispersion es ahora un widget JS con selector
+       desplegable que permite cambiar la metrica del eje X en el browser, sin recalcular.
+       Los datos se embeben como JSON en el HTML. Se mantiene regresion lineal y medianas.
+   13. NORTE DEL EDA CLARIFICADO: el reporte HTML reorganiza sus secciones para que
+       el foco sea generar CRITERIOS para construir medidas DAX en Power BI
+       (umbrales P50/P75/P90, alertas de outliers, cobertura de datos por metrica).
+       La narrativa de storytelling queda reservada para el dashboard final.
+
+  Cambios v7 (robustez + consistencia):
+   14. Defaults, nombres de reportes, ZIP y mensajes actualizados de v5/v6 a v7.
+   15. Booleanos robustos con normalizacion unicode y soporte para "si"/"sí".
+   16. HTML escapado en tablas, labels y hallazgos para evitar markup roto.
+   17. EDA tolerante a dimensiones vacias o columnas faltantes.
+   18. Texto mojibakeado corregido en reportes y etiquetas.
 ========================================================
 """
 
@@ -28,6 +46,7 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
+import html
 import io
 import json
 import os
@@ -241,6 +260,12 @@ def normalizar(nombre) -> str:
     return re.sub(r"\s+", " ", nombre)
 
 
+def esc_html(value) -> str:
+    if pd.isna(value):
+        return ""
+    return html.escape(str(value), quote=True)
+
+
 def save(df: pd.DataFrame, nombre: str, output_dir: Path) -> None:
     path = output_dir / f"{nombre}.csv"
     df.to_csv(path, index=False, sep=";", decimal=",")
@@ -271,12 +296,13 @@ def to_num(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
 
 def to_bool(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
-    truthy = {"true", "1", "yes", "si", "sí", "s"}
+    truthy = {"true", "1", "yes", "y", "si", "s", "t"}
     for col in cols:
         if col in df.columns:
-            df[col] = (
-                df[col].astype(str).str.strip().str.lower().isin(truthy).astype(int)
+            normalizada = df[col].map(
+                lambda v: normalizar(v) if isinstance(v, str) else str(v).strip().lower()
             )
+            df[col] = normalizada.isin(truthy).astype(int)
     return df
 
 
@@ -958,37 +984,32 @@ def grafico_boxplot_multiple(df, cols, titulos, color, fondo, plt) -> str:
 
 
 def grafico_scatter_valoracion(df, metrica, label_metrica, color, fondo, titulo, plt) -> str:
-    if metrica not in df.columns or "valor_mercado_promedio" not in df.columns:
-        return ""
-    df_plot = df[
-        pd.to_numeric(df[metrica], errors="coerce").notna()
-        & pd.to_numeric(df["valor_mercado_promedio"], errors="coerce").notna()
-        & (pd.to_numeric(df["valor_mercado_promedio"], errors="coerce") > 0)
-    ].copy()
-    if len(df_plot) < 10:
-        return ""
-    df_plot[metrica] = pd.to_numeric(df_plot[metrica], errors="coerce")
-    df_plot["valor_mercado_promedio"] = pd.to_numeric(df_plot["valor_mercado_promedio"], errors="coerce")
+    """Compatibilidad legacy: el scatter ahora es interactivo en el HTML."""
+    return ""
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    fig.patch.set_facecolor(fondo)
-    ax.set_facecolor(fondo)
-    ax.scatter(df_plot[metrica], df_plot["valor_mercado_promedio"] / 1e6, color=color, alpha=0.45, s=35, edgecolors="white", linewidth=0.4)
-    ax.axvline(df_plot[metrica].median(), color="#aaaaaa", linestyle="--", linewidth=1, alpha=0.7)
-    ax.axhline((df_plot["valor_mercado_promedio"] / 1e6).median(), color="#aaaaaa", linestyle="--", linewidth=1, alpha=0.7)
-    try:
-        z = np.polyfit(df_plot[metrica], df_plot["valor_mercado_promedio"] / 1e6, 1)
-        p = np.poly1d(z)
-        x_line = np.linspace(df_plot[metrica].min(), df_plot[metrica].max(), 100)
-        ax.plot(x_line, p(x_line), color=color, linewidth=1.5, alpha=0.5)
-    except Exception:
-        pass
-    ax.set_xlabel(label_metrica)
-    ax.set_ylabel("Valor de mercado promedio (M EUR)")
-    ax.set_title(titulo, fontsize=12, fontweight="bold")
-    ax.spines[["top", "right"]].set_visible(False)
-    plt.tight_layout()
-    return fig_to_b64(fig, plt)
+
+def preparar_json_scatter(df: pd.DataFrame, cols_metricas: list[str], titulos_metricas: list[str]) -> str:
+    """Genera el JSON embebido para el scatter interactivo v7.
+    Incluye todas las metricas del perfil para que el selector JS pueda cambiar el eje X."""
+    col_val = "valor_mercado_promedio"
+    registros = []
+    df_work = df.copy()
+    for col in cols_metricas + [col_val]:
+        if col in df_work.columns:
+            df_work[col] = pd.to_numeric(df_work[col], errors="coerce")
+    df_work = df_work[pd.to_numeric(df_work.get(col_val, pd.Series(dtype=float)), errors="coerce") > 0].copy()
+    name_col = "player" if "player" in df_work.columns else (df_work.columns[0] if len(df_work.columns) > 0 else None)
+    for _, row in df_work.iterrows():
+        rec: dict = {"vm": round(float(row[col_val]) / 1e6, 3) if pd.notna(row.get(col_val)) else None}
+        if name_col and pd.notna(row.get(name_col)):
+            rec["n"] = str(row[name_col])
+        for col in cols_metricas:
+            if col in row.index and pd.notna(row[col]):
+                rec[col] = round(float(row[col]), 2)
+        if rec.get("vm") is not None:
+            registros.append(rec)
+    meta = [{"col": c, "label": str(t)} for c, t in zip(cols_metricas, titulos_metricas)]
+    return json.dumps({"data": registros, "metricas": meta}, ensure_ascii=False)
 
 
 def grafico_boxplot_cuartiles(df, metrica, color, fondo, label_metrica, plt) -> str:
@@ -1062,7 +1083,7 @@ def tabla_stats_html(df, cols, titulos, color) -> str:
         kurt = d.kurtosis()
         lbl = "Simetrica" if abs(skew) < 0.5 else ("Asim. +" if skew > 0 else "Asim. -")
         filas += f"""
-        <tr><td><code>{titulo}</code></td><td>{len(d):,}</td>
+        <tr><td><code>{esc_html(titulo)}</code></td><td>{len(d):,}</td>
         <td>{d.mean():.2f}</td><td>{d.median():.2f}</td><td>{d.std():.2f}</td>
         <td>{d.min():.2f}</td><td>{d.max():.2f}</td>
         <td>{skew:.2f} <em>({lbl})</em></td><td>{kurt:.2f}</td></tr>"""
@@ -1080,7 +1101,7 @@ def tabla_iqr_html(df, cols, titulos, color) -> str:
         r = calcular_iqr(df[col])
         sem = "rojo" if r["pct_outliers"] > 10 else ("amarillo" if r["pct_outliers"] > 5 else "verde")
         filas += f"""
-        <tr><td><code>{titulo}</code></td><td>{r['Q1']:.2f}</td><td>{r['Q3']:.2f}</td>
+        <tr><td><code>{esc_html(titulo)}</code></td><td>{r['Q1']:.2f}</td><td>{r['Q3']:.2f}</td>
         <td>{r['IQR']:.2f}</td><td>{r['lower']:.2f}</td><td>{r['upper']:.2f}</td>
         <td><strong>{r['n_outliers']:,}</strong></td><td>{r['pct_outliers']}% ({sem})</td></tr>"""
     return f"""<table class="tbl"><thead><tr style="background:{color};color:white">
@@ -1097,7 +1118,7 @@ def tabla_universo_html(df, color) -> str:
     pct_convm = (n_convm / n_jug * 100) if n_jug else 0
     med_val_txt = f"{med_val / 1e6:.1f} M EUR" if pd.notna(med_val) else "Sin datos"
     equipos = df.get("equipo_habitual", pd.Series(dtype=str)).value_counts().head(5)
-    rows_eq = "".join(f"<tr><td>{eq}</td><td>{cnt}</td></tr>" for eq, cnt in equipos.items())
+    rows_eq = "".join(f"<tr><td>{esc_html(eq)}</td><td>{cnt}</td></tr>" for eq, cnt in equipos.items())
     return f"""
     <div class="two-cols">
       <table class="tbl"><thead><tr style="background:{color};color:white"><th>Metrica</th><th>Valor</th></tr></thead>
@@ -1119,17 +1140,18 @@ def generar_html_perfil(
     imgs_hist,
     img_box,
     img_hist_val,
-    img_scatter,
+    img_scatter,        # ignorado en v6, se usa json_scatter
     img_cuartiles,
     t_stats,
     t_iqr,
     t_universo,
     colores,
     hallazgos,
+    json_scatter="{}",  # nuevo parametro v7
 ) -> str:
     c = colores
     grids = "".join(
-        f"""<div class="chart-card"><h3>{tit}</h3><img src="data:image/png;base64,{img}"/></div>"""
+        f"""<div class="chart-card"><h3>{esc_html(tit)}</h3><img src="data:image/png;base64,{img}"/></div>"""
         for tit, img in zip(titulos_metricas, imgs_hist)
         if img
     )
@@ -1146,22 +1168,186 @@ def generar_html_perfil(
         else ""
     )
     cuartiles_block = (
-        f"""<div class="chart-card"><h3>Valor por cuartiles</h3><img src="data:image/png;base64,{img_cuartiles}"/></div>"""
+        f"""<div class="chart-card"><h3>Valor por cuartiles de rendimiento</h3><img src="data:image/png;base64,{img_cuartiles}"/></div>"""
         if img_cuartiles
         else ""
     )
-    scatter_block = (
-        f"""<div class="chart-card span-2"><h3>Rendimiento vs valor de mercado</h3><img src="data:image/png;base64,{img_scatter}"/></div>"""
-        if img_scatter
-        else ""
-    )
-    hallazgos_li = "".join(f"<li>{h}</li>" for h in hallazgos)
+    hallazgos_li = "".join(f"<li>{esc_html(h)}</li>" for h in hallazgos)
+
+    # Tabla de umbrales percentiles para criterios DAX
+    umbral_rows = ""
+    for col, tit in zip(cols_metricas, titulos_metricas):
+        if col in df_analitico.columns:
+            s = pd.to_numeric(df_analitico[col], errors="coerce").dropna()
+            if len(s) > 4:
+                p50 = s.quantile(0.50)
+                p75 = s.quantile(0.75)
+                p90 = s.quantile(0.90)
+                cov = round(s[s > 0].count() / len(s) * 100, 1)
+                alerta = "baja cobertura" if cov < 40 else ("ok" if cov > 70 else "media")
+                umbral_rows += f"""<tr>
+                  <td><code>{esc_html(tit)}</code></td>
+                  <td style="text-align:right">{p50:.1f}</td>
+                  <td style="text-align:right;font-weight:700;color:var(--a)">{p75:.1f}</td>
+                  <td style="text-align:right">{p90:.1f}</td>
+                  <td style="text-align:right">{cov}% {alerta}</td>
+                </tr>"""
+    umbral_table = f"""
+    <table class="tbl">
+      <thead><tr style="background:{c['primario']};color:white">
+        <th>Metrica</th><th>P50</th><th>P75 - umbral DAX</th><th>P90</th><th>Cobertura</th>
+      </tr></thead>
+      <tbody>{umbral_rows}</tbody>
+    </table>
+    <p style="font-size:.82rem;color:#666;margin-top:8px">El P75 es el umbral sugerido para filtrar candidatos en las medidas DAX. Cobertura = % de jugadores con valor &gt; 0 en esa metrica.</p>
+    """ if umbral_rows else "<p>Sin datos suficientes.</p>"
+
+    # Scatter interactivo JS
+    scatter_interactivo = f"""
+    <div class="chart-card span-2" style="padding:24px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <h3 style="margin:0">Rendimiento vs valor de mercado</h3>
+        <label style="font-size:.88rem;color:#555">Metrica eje X:
+          <select id="sel-metrica" style="margin-left:6px;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:.88rem"></select>
+        </label>
+        <span id="scatter-r" style="font-size:.82rem;color:#888"></span>
+      </div>
+      <canvas id="scatter-canvas" height="380" style="width:100%;cursor:crosshair"></canvas>
+      <div id="scatter-tooltip" style="position:fixed;background:rgba(30,30,30,.92);color:#fff;padding:7px 12px;border-radius:7px;font-size:.82rem;pointer-events:none;display:none;z-index:99;max-width:220px;line-height:1.5"></div>
+    </div>
+    <script>
+    (function(){{
+      const RAW = {json_scatter};
+      if(!RAW.data || RAW.data.length < 5) return;
+      const DATA = RAW.data;
+      const METRICAS = RAW.metricas;
+      const COLOR = "{c['primario']}";
+      const sel = document.getElementById('sel-metrica');
+      METRICAS.forEach(function(m,i){{
+        const o = document.createElement('option');
+        o.value = m.col; o.textContent = m.label;
+        sel.appendChild(o);
+      }});
+
+      const canvas = document.getElementById('scatter-canvas');
+      const tt = document.getElementById('scatter-tooltip');
+      const ctx = canvas.getContext('2d');
+      let currentPoints = [];
+
+      function hexToRgb(hex){{
+        const r = parseInt(hex.slice(1,3),16);
+        const g = parseInt(hex.slice(3,5),16);
+        const b = parseInt(hex.slice(5,7),16);
+        return r+','+g+','+b;
+      }}
+
+      function linReg(xs,ys){{
+        const n=xs.length; if(n<3) return null;
+        const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+        let num=0,den=0;
+        for(let i=0;i<n;i++){{num+=(xs[i]-mx)*(ys[i]-my);den+=(xs[i]-mx)**2;}}
+        if(den===0) return null;
+        const m=num/den, b=my-m*mx;
+        const ss_res=ys.reduce((a,y,i)=>a+(y-(m*xs[i]+b))**2,0);
+        const ss_tot=ys.reduce((a,y)=>a+(y-my)**2,0);
+        const r2=ss_tot===0?0:1-ss_res/ss_tot;
+        return {{m,b,r2}};
+      }}
+
+      function median(arr){{
+        const s=[...arr].sort((a,b)=>a-b);
+        const mid=Math.floor(s.length/2);
+        return s.length%2===0?(s[mid-1]+s[mid])/2:s[mid];
+      }}
+
+      function draw(colKey){{
+        const W=canvas.offsetWidth; canvas.width=W; canvas.height=380;
+        const pts=DATA.filter(d=>d[colKey]!=null && d.vm!=null);
+        if(pts.length<5){{ ctx.fillStyle='#999'; ctx.font='14px Arial'; ctx.fillText('Datos insuficientes para esta metrica.',40,200); return; }}
+        const xs=pts.map(d=>d[colKey]), ys=pts.map(d=>d.vm);
+        const xmin=Math.min(...xs), xmax=Math.max(...xs), ymin=Math.min(...ys), ymax=Math.max(...ys);
+        const pad={{l:60,r:24,t:20,b:50}};
+        const W2=W-pad.l-pad.r, H2=380-pad.t-pad.b;
+        const toX=v=>pad.l+(v-xmin)/(xmax-xmin||1)*W2;
+        const toY=v=>pad.t+H2-(v-ymin)/(ymax-ymin||1)*H2;
+
+        ctx.clearRect(0,0,W,380);
+
+        // Lineas de mediana
+        const mx=median(xs), my=median(ys);
+        ctx.setLineDash([5,4]); ctx.strokeStyle='#cccccc'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(toX(mx),pad.t); ctx.lineTo(toX(mx),pad.t+H2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pad.l,toY(my)); ctx.lineTo(pad.l+W2,toY(my)); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Regresion
+        const reg=linReg(xs,ys);
+        if(reg){{
+          ctx.strokeStyle='rgba('+hexToRgb(COLOR)+',.45)'; ctx.lineWidth=1.8;
+          ctx.beginPath(); ctx.moveTo(toX(xmin),toY(reg.m*xmin+reg.b)); ctx.lineTo(toX(xmax),toY(reg.m*xmax+reg.b)); ctx.stroke();
+          document.getElementById('scatter-r').textContent='R^2 = '+reg.r2.toFixed(3);
+        }}
+
+        // Ejes
+        ctx.strokeStyle='#cccccc'; ctx.lineWidth=1; ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,pad.t+H2); ctx.lineTo(pad.l+W2,pad.t+H2); ctx.stroke();
+        ctx.fillStyle='#555'; ctx.font='11px Arial'; ctx.textAlign='center';
+        [0,.25,.5,.75,1].forEach(function(t){{
+          const xv=xmin+t*(xmax-xmin), px=toX(xv);
+          ctx.fillText(xv.toFixed(0),px,pad.t+H2+16);
+        }});
+        ctx.textAlign='right';
+        [0,.25,.5,.75,1].forEach(function(t){{
+          const yv=ymin+t*(ymax-ymin), py=toY(yv);
+          ctx.fillText(yv.toFixed(1)+'M',pad.l-6,py+4);
+        }});
+
+        // Puntos
+        currentPoints=[];
+        pts.forEach(function(d){{
+          const px=toX(d[colKey]), py=toY(d.vm);
+          ctx.beginPath(); ctx.arc(px,py,5,0,2*Math.PI);
+          ctx.fillStyle='rgba('+hexToRgb(COLOR)+',.55)';
+          ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1;
+          ctx.fill(); ctx.stroke();
+          currentPoints.push({{px,py,d}});
+        }});
+      }}
+
+      function getColLabel(colKey){{
+        const m=METRICAS.find(function(x){{return x.col===colKey;}});
+        return m?m.label:colKey;
+      }}
+
+      canvas.addEventListener('mousemove',function(e){{
+        const rect=canvas.getBoundingClientRect();
+        const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+        let closest=null, bestD=Infinity;
+        currentPoints.forEach(function(p){{
+          const d=Math.hypot(p.px-mx,p.py-my);
+          if(d<bestD){{bestD=d;closest=p;}}
+        }});
+        if(closest && bestD<18){{
+          const colKey=sel.value;
+          tt.style.display='block';
+          tt.style.left=(e.clientX+14)+'px'; tt.style.top=(e.clientY-10)+'px';
+          const name=closest.d.n||'Jugador';
+          tt.innerHTML='<strong>'+name+'</strong><br>'+getColLabel(colKey)+': '+closest.d[colKey]+'<br>Valor: '+closest.d.vm.toFixed(1)+' M EUR';
+        }} else {{ tt.style.display='none'; }}
+      }});
+      canvas.addEventListener('mouseleave',function(){{tt.style.display='none';}});
+
+      sel.addEventListener('change',function(){{draw(sel.value);}});
+      draw(sel.value);
+      window.addEventListener('resize',function(){{draw(sel.value);}});
+    }})();
+    </script>"""
 
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>EDA v5 - {perfil}</title>
+<title>EDA v7 - {esc_html(perfil)}</title>
 <style>
   :root{{--p:{c['primario']};--s:{c['secundario']};--f:{c['fondo']};--a:{c['acento']};--txt:#1f2937;--b:#e5e7eb;}}
   *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--f);color:var(--txt);line-height:1.55}}
@@ -1181,22 +1367,47 @@ def generar_html_perfil(
 </head>
 <body>
 <div class="header">
-  <h1>EDA v5 - {perfil}</h1>
-  <p>{subtitulo}</p>
-  <p><em>{filosofia}</em></p>
+  <h1>EDA v7 - {esc_html(perfil)}</h1>
+  <p>{esc_html(subtitulo)}</p>
+  <p><em>{esc_html(filosofia)}</em></p>
   <span class="badge">{len(df_analitico):,} jugadores analizados</span>
   <span class="badge">{len(cols_metricas)} metricas</span>
   <span class="badge">La Liga 2014-2017</span>
-  <span class="badge">Transfermarkt</span>
+  <span class="badge">Objetivo: criterios para DAX</span>
 </div>
 <div class="container">
-  <div class="section"><div class="sec-title">1. Universo del perfil</div><div class="card">{t_universo}</div></div>
-  <div class="section"><div class="sec-title">2. Distribuciones</div><div class="charts-grid">{grids}</div></div>
-  <div class="section"><div class="sec-title">3. Estadisticos descriptivos</div><div class="card" style="overflow-x:auto">{t_stats}</div></div>
-  <div class="section"><div class="sec-title">4. Outliers IQR</div><div class="card" style="overflow-x:auto">{t_iqr}</div></div>
-  <div class="section"><div class="sec-title">5. Boxplots</div><div class="card">{img_box_block}</div></div>
-  <div class="section"><div class="sec-title">6. Valoraciones</div><div class="charts-grid">{hist_val_block}{cuartiles_block}{scatter_block}</div></div>
-  <div class="section"><div class="sec-title">7. Hallazgos para DAX</div><div class="card"><ul>{hallazgos_li}</ul></div></div>
+  <div class="section">
+    <div class="sec-title">1. Universo del perfil</div>
+    <div class="card">{t_universo}</div>
+  </div>
+  <div class="section">
+    <div class="sec-title">2. Criterios para DAX — umbrales por percentil</div>
+    <div class="card">{umbral_table}</div>
+  </div>
+  <div class="section">
+    <div class="sec-title">3. Distribuciones</div>
+    <div class="charts-grid">{grids}</div>
+  </div>
+  <div class="section">
+    <div class="sec-title">4. Estadisticos descriptivos</div>
+    <div class="card" style="overflow-x:auto">{t_stats}</div>
+  </div>
+  <div class="section">
+    <div class="sec-title">5. Outliers IQR — alerta de distorsion en rankings</div>
+    <div class="card" style="overflow-x:auto">{t_iqr}</div>
+  </div>
+  <div class="section">
+    <div class="sec-title">6. Boxplots</div>
+    <div class="card">{img_box_block}</div>
+  </div>
+  <div class="section">
+    <div class="sec-title">7. Correlacion con valor de mercado</div>
+    <div class="charts-grid">{hist_val_block}{cuartiles_block}{scatter_interactivo}</div>
+  </div>
+  <div class="section">
+    <div class="sec-title">8. Notas para Power BI / DAX</div>
+    <div class="card"><ul>{hallazgos_li}</ul></div>
+  </div>
 </div>
 </body></html>"""
 
@@ -1216,6 +1427,10 @@ def valor_mercado_promedio(dim_valoracion: pd.DataFrame, player_ids) -> pd.DataF
 def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valoracion: pd.DataFrame) -> None:
     warnings.filterwarnings("ignore")
     plt, stats = setup_plotting()
+    dim_jugador = require_columns(
+        dim_jugador.copy(),
+        ["player_id", "posicion_habitual", "equipo_habitual", "market_value_in_eur"],
+    )
     dim_jugador_slim = dim_jugador[
         ["player_id", "posicion_habitual", "equipo_habitual", "market_value_in_eur"]
     ].copy()
@@ -1231,8 +1446,9 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
         imgs_hist = [grafico_histograma(df, col, c["primario"], tit, c["fondo"], plt, stats) for col, tit in zip(cols, tits)]
         img_box = grafico_boxplot_multiple(df, cols, tits, c["primario"], c["fondo"], plt)
         img_hist_val = grafico_hist_valoracion(df["valor_mercado_promedio"], c["primario"], c["fondo"], plt)
-        img_scatter = grafico_scatter_valoracion(df, metrica_principal, label_principal, c["primario"], c["fondo"], f"{label_principal} vs valor de mercado", plt)
+        img_scatter = ""  # v7: se conserva por compatibilidad; el scatter real es interactivo
         img_cuartiles = grafico_boxplot_cuartiles(df, metrica_principal, c["primario"], c["fondo"], label_principal, plt)
+        json_scatter = preparar_json_scatter(df, cols, tits)
         html = generar_html_perfil(
             perfil,
             subtitulo,
@@ -1250,6 +1466,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
             tabla_universo_html(df, c["primario"]),
             c,
             hallazgos,
+            json_scatter=json_scatter,
         )
         (output_dir / nombre_archivo).write_text(html, encoding="utf-8")
         print(f"   OK {nombre_archivo} - {len(df):,} jugadores")
@@ -1286,7 +1503,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_del = ["xg_sin_penal", "presiones_ultimo_tercio", "duelos_campo_rival", "recepciones_campo_rival"]
     tits_del = ["xG sin penal", "Presiones ultimo tercio", "Duelos ganados campo rival", "Recepciones campo rival"]
     escribir_reporte(
-        "eda_v5_delanteros.html",
+        "eda_v7_delanteros.html",
         "Delanteros",
         "9 falso cruyffista - presion, movilidad y xG sin penal.",
         "Atacantes que generan peligro, presionan alto y participan fuera del area.",
@@ -1314,7 +1531,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_mid = ["pases_progresivos", "ratio_pases_prog", "conducciones_progresivas", "pases_exitosos_bajo_presion", "perdidas_balon"]
     tits_mid = ["Pases progresivos", "Ratio pases progresivos", "Conducciones progresivas", "Pases exitosos bajo presion", "Perdidas de balon"]
     escribir_reporte(
-        "eda_v5_mediocampistas.html",
+        "eda_v7_mediocampistas.html",
         "Mediocampistas",
         "Entre lineas - progresion, presion y bajo error.",
         "Jugadores que aceleran el juego hacia adelante y resisten la presion.",
@@ -1335,15 +1552,21 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     duelos_zona = df_duel[df_duel["player_id"].isin(players_def) & (df_duel["location_x"] > 40) & (df_duel["es_duelo_ganado"] == 1)].groupby("player_id").size().reset_index(name="duelos_zona_alta")
     intercep_cr = df_int[df_int["player_id"].isin(players_def) & (df_int["location_x"] > 60)].groupby("player_id").size().reset_index(name="intercepciones_campo_rival")
     pases_prog_def = df_pass[df_pass["player_id"].isin(players_def) & (df_pass["location_x"] < 40) & (df_pass["pass_end_x"] > df_pass["location_x"] + 15)].groupby("player_id").size().reset_index(name="pases_prog_desde_atras")
-    despejes_aereos = df_clear[df_clear["player_id"].isin(players_def) & (df_clear["clearance_aerial_won"] == 1)].groupby("player_id").size().reset_index(name="despejes_aereos")
-    df_def = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_def)].merge(duelos_zona, on="player_id", how="left").merge(intercep_cr, on="player_id", how="left").merge(pases_prog_def, on="player_id", how="left").merge(despejes_aereos, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_def), on="player_id", how="left").fillna(0)
-    cols_def = ["duelos_zona_alta", "intercepciones_campo_rival", "pases_prog_desde_atras", "despejes_aereos"]
-    tits_def = ["Duelos ganados zona alta", "Intercepciones campo rival", "Pases progresivos desde atras", "Despejes aereos"]
+    # v7: mantiene el reemplazo de despejes_aereos por un proxy mas consistente con el perfil.
+    # Proxy de "correccion a campo abierto": carries en zona media (x 35-65) con avance >= 8m.
+    carrys_zona_media = df_carry[
+        df_carry["player_id"].isin(players_def)
+        & (df_carry["location_x"] >= 35) & (df_carry["location_x"] <= 65)
+        & (df_carry["carry_end_x"] > df_carry["location_x"] + 8)
+    ].groupby("player_id").size().reset_index(name="carrys_progresivos_zona_media")
+    df_def = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_def)].merge(duelos_zona, on="player_id", how="left").merge(intercep_cr, on="player_id", how="left").merge(pases_prog_def, on="player_id", how="left").merge(carrys_zona_media, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_def), on="player_id", how="left").fillna(0)
+    cols_def = ["duelos_zona_alta", "intercepciones_campo_rival", "pases_prog_desde_atras", "carrys_progresivos_zona_media"]
+    tits_def = ["Duelos ganados zona alta", "Intercepciones campo rival", "Pases progresivos desde atras", "Carrys progresivos zona media"]
     escribir_reporte(
-        "eda_v5_defensores.html",
+        "eda_v7_defensores.html",
         "Defensores",
         "Libero moderno - zonas altas y salida limpia.",
-        "Centrales que defienden lejos del arco y construyen desde atras.",
+        "Centrales que defienden lejos del arco, interceptan en avance y corrigen conduciendo.",
         df_def,
         cols_def,
         tits_def,
@@ -1352,7 +1575,9 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
         "Duelos ganados zona alta",
         [
             f"Universo: {len(df_def)} defensores. P75 duelos zona alta = {df_def['duelos_zona_alta'].quantile(.75):.0f}.",
-            "Para DAX: score defensor = duelos_zona_alta * 0.35 + intercepciones_campo_rival * 0.30 + pases_prog_desde_atras * 0.35.",
+            f"P75 carrys_progresivos_zona_media = {df_def['carrys_progresivos_zona_media'].quantile(.75):.0f} — usar como umbral minimo DAX.",
+            "Para DAX: score defensor = duelos_zona_alta*0.35 + intercepciones_campo_rival*0.30 + pases_prog_desde_atras*0.20 + carrys_progresivos_zona_media*0.15.",
+            "v7: despejes_aereos se mantiene eliminado porque tiene datos insuficientes y contradice el perfil de central rapido buscado.",
         ],
     )
 
@@ -1366,7 +1591,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_lat = ["duelos_defensivos_ganados", "conducciones_hacia_centro", "pases_hacia_adentro", "presiones_en_banda"]
     tits_lat = ["Duelos defensivos ganados", "Conducciones hacia el centro", "Pases hacia adentro", "Presiones en banda"]
     escribir_reporte(
-        "eda_v5_laterales.html",
+        "eda_v7_laterales.html",
         "Laterales",
         "Lateral invertido - versatilidad y juego interior.",
         "Laterales firmes en el duelo y capaces de cerrarse hacia zonas interiores.",
@@ -1390,13 +1615,13 @@ def zip_output(output_dir: Path, zip_name: str) -> Path:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pipeline de scouting v5 corregido.")
+    parser = argparse.ArgumentParser(description="Pipeline de scouting v7 corregido.")
     parser.add_argument("--repo-path", type=Path, default=Path("open-data/data"), help="Ruta a open-data/data de StatsBomb.")
     parser.add_argument("--tm-path", type=Path, default=Path("transfermarkt_data"), help="Ruta a CSVs de Transfermarkt.")
-    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v5_output"), help="Carpeta de salida.")
+    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v7_output"), help="Carpeta de salida.")
     parser.add_argument("--download-data", action="store_true", help="Descarga StatsBomb open-data y Transfermarkt via Kaggle.")
     parser.add_argument("--skip-eda", action="store_true", help="Genera solo CSV, sin reportes HTML.")
-    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v5_final.zip.")
+    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v7_final.zip.")
     return parser.parse_args()
 
 
@@ -1417,7 +1642,7 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("  PIPELINE DE SCOUTING V5")
+    print("  PIPELINE DE SCOUTING V7")
     print("=" * 60)
 
     print("\n-- BLOQUE 1: Carga Transfermarkt")
@@ -1448,14 +1673,14 @@ def main() -> None:
     total_mb = sum(f.stat().st_size for f in csvs + htmls) / 1024 / 1024
 
     print("\n" + "=" * 60)
-    print("  PIPELINE V5 COMPLETADO")
+    print("  PIPELINE V7 COMPLETADO")
     print("=" * 60)
     print(f"\n  {len(csvs)} archivos CSV en ./{args.output_dir}/")
     print(f"  {len(htmls)} reportes HTML en ./{args.output_dir}/")
     print(f"  Tamano total: {total_mb:.1f} MB")
 
     if args.zip:
-        zip_path = zip_output(args.output_dir, "scouting_v5_final")
+        zip_path = zip_output(args.output_dir, "scouting_v7_final")
         print(f"  ZIP generado: {zip_path}")
 
     print(
