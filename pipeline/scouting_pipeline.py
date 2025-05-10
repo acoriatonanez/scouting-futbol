@@ -1,12 +1,12 @@
 """
 ========================================================
-  PIPELINE DE SCOUTING V7
+  PIPELINE DE SCOUTING V9
   StatsBomb open-data + Transfermarkt Kaggle
 
   Entorno: La Liga | 2014/15, 2015/16, 2016/17
 
   Output:
-    - 18 CSV: 4 dimensiones + 14 tablas fact
+    - 19 CSV: 4 dimensiones + 15 tablas fact
     - 4 reportes HTML de EDA por perfil
 
   Fixes principales v5:
@@ -28,7 +28,7 @@
        desplegable que permite cambiar la metrica del eje X en el browser, sin recalcular.
        Los datos se embeben como JSON en el HTML. Se mantiene regresion lineal y medianas.
    13. NORTE DEL EDA CLARIFICADO: el reporte HTML reorganiza sus secciones para que
-       el foco sea generar CRITERIOS para construir medidas DAX en Power BI
+       el foco sea generar CRITERIOS para construir medidas en Power BI
        (umbrales P50/P75/P90, alertas de outliers, cobertura de datos por metrica).
        La narrativa de storytelling queda reservada para el dashboard final.
 
@@ -38,6 +38,28 @@
    16. HTML escapado en tablas, labels y hallazgos para evitar markup roto.
    17. EDA tolerante a dimensiones vacias o columnas faltantes.
    18. Texto mojibakeado corregido en reportes y etiquetas.
+
+  Cambios v8 (EDA interactivo):
+   19. Histogramas y boxplots de metricas migrados a Canvas interactivo.
+   20. Boxplot Canvas con whiskers IQR y outliers, consistente con la tabla IQR.
+   21. Delanteros incorporan dribbles exitosos en campo rival.
+   22. Notas DAX conservadas como criterios accionables dentro del reporte.
+
+  Cambios v9 (fact_minutes + reestructura EDA):
+   23. FACT_MINUTES: nueva tabla con minutos jugados por jugador x partido,
+       derivada de eventos Starting XI, Substitution y Half End.
+       Columnas: match_id, player_id, team_id, minuto_entrada, minuto_salida,
+       minutos_jugados, es_titular, fue_sustituido.
+   24. ESTRUCTURA HTML REORDENADA: el reporte EDA sigue el orden pedagogico:
+       1. Universo del perfil
+       2. Umbrales por percentil
+       3. Estadisticas descriptivas
+       4. Outliers IQR - alerta de distorsion en rankings
+       5. Distribuciones y boxplot IQR (graficos)
+       6. Correlacion con valor de mercado
+       7. Criterios accionables para Power BI
+   25. TERMINOLOGIA LIMPIA: se elimina toda referencia a "DAX" en titulos,
+       badges y textos del reporte HTML. Se usa "Power BI" o criterios accionables.
 ========================================================
 """
 
@@ -83,6 +105,10 @@ EVENTOS_OBJETIVO = {
     "Foul Won",
     "Miscontrol",
     "Block",
+    # v9: eventos de tiempo de juego para fact_minutes
+    "Starting XI",
+    "Substitution",
+    "Half End",
 }
 
 FECHAS_INICIO = "2014-07-01"
@@ -180,6 +206,10 @@ COLS_EVENTO = {
     "Foul Won": ["foul_won_advantage", "foul_won_defensive", "duration"],
     "Miscontrol": ["miscontrol_aerial_won", "duration"],
     "Block": ["block_deflection", "duration"],
+    # v9: columnas para calculo de minutos jugados
+    "Starting XI": ["tactics"],
+    "Substitution": ["substitution_outcome", "substitution_replacement"],
+    "Half End": [],
 }
 
 NOMBRE_ARCHIVO = {
@@ -197,6 +227,42 @@ NOMBRE_ARCHIVO = {
     "Foul Won": "fact_foul_won",
     "Miscontrol": "fact_miscontrol",
     "Block": "fact_block",
+    # v9: no se routean a CSV incremental; se procesan en build_fact_minutes
+    "Starting XI": "_starting_xi_raw",
+    "Substitution": "_substitution_raw",
+    "Half End": "_half_end_raw",
+}
+
+BOOL_FLAG_COLS = {
+    "under_pressure",
+    "counterpress",
+    "pass_shot_assist",
+    "pass_goal_assist",
+    "pass_cross",
+    "pass_switch",
+    "pass_through_ball",
+    "pass_aerial_won",
+    "pass_miscommunication",
+    "pass_deflected",
+    "pass_inswinging",
+    "pass_outswinging",
+    "pass_straight",
+    "pass_cut_back",
+    "pass_no_touch",
+    "shot_first_time",
+    "shot_aerial_won",
+    "shot_deflected",
+    "dribble_nutmeg",
+    "dribble_no_touch",
+    "clearance_aerial_won",
+    "clearance_head",
+    "clearance_left_foot",
+    "clearance_right_foot",
+    "foul_committed_advantage",
+    "foul_won_advantage",
+    "foul_won_defensive",
+    "miscontrol_aerial_won",
+    "block_deflection",
 }
 
 COLORES = {
@@ -260,6 +326,14 @@ def normalizar(nombre) -> str:
     return re.sub(r"\s+", " ", nombre)
 
 
+def normalizar_token(value) -> str:
+    if not isinstance(value, str):
+        return str(value).strip().lower()
+    value = unicodedata.normalize("NFD", value)
+    value = "".join(c for c in value if unicodedata.category(c) != "Mn")
+    return value.strip().lower()
+
+
 def esc_html(value) -> str:
     if pd.isna(value):
         return ""
@@ -299,10 +373,24 @@ def to_bool(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     truthy = {"true", "1", "yes", "y", "si", "s", "t"}
     for col in cols:
         if col in df.columns:
-            normalizada = df[col].map(
-                lambda v: normalizar(v) if isinstance(v, str) else str(v).strip().lower()
-            )
+            normalizada = df[col].map(normalizar_token)
             df[col] = normalizada.isin(truthy).astype(int)
+    return df
+
+
+def flags_to_int(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    truthy = {True, 1, "1", "true", "t", "yes", "y", "si", "s"}
+
+    def es_true(v) -> int:
+        if pd.isna(v):
+            return 0
+        if isinstance(v, str):
+            return int(normalizar_token(v) in truthy)
+        return int(v in truthy)
+
+    for col in cols:
+        if col in df.columns:
+            df[col] = df[col].map(es_true).astype("int8")
     return df
 
 
@@ -479,6 +567,7 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
     elif tipo == "Ball Receipt*" and "ball_receipt_outcome" in subset.columns:
         subset["es_recepcion_exitosa"] = subset["ball_receipt_outcome"].isna().astype(int)
 
+    subset = flags_to_int(subset, safe_cols(subset, list(BOOL_FLAG_COLS)))
     return subset
 
 
@@ -615,11 +704,20 @@ def procesar_partidos(repo_path: Path, output_dir: Path) -> tuple[list[dict], li
             df_match = pd.DataFrame(rows)
             conteo_total += len(df_match)
 
+            # Tipos de tiempo de juego: se acumulan en archivos raw temporales (prefijo _)
+            # separados para no contaminar las fact tables de eventos.
+            TIPOS_TIEMPO = {"Starting XI", "Substitution", "Half End"}
+
             for tipo, nombre_csv in NOMBRE_ARCHIVO.items():
                 subset = df_match[df_match["type"] == tipo].copy()
                 if subset.empty:
                     continue
-                append_csv(build_fact_subset(subset, tipo), nombre_csv, output_dir)
+                if tipo in TIPOS_TIEMPO:
+                    # Solo guardar columnas clave para build_fact_minutes
+                    cols_tiempo = safe_cols(subset, ["match_id", "player_id", "team_id", "period", "minute", "second", "type"] + COLS_EVENTO.get(tipo, []))
+                    append_csv(subset[cols_tiempo], nombre_csv, output_dir)
+                else:
+                    append_csv(build_fact_subset(subset, tipo), nombre_csv, output_dir)
 
             if (i + 1) % 10 == 0:
                 print(
@@ -885,21 +983,201 @@ def build_calendario(output_dir: Path) -> pd.DataFrame:
     return dim_calendario
 
 
+def build_fact_minutes(output_dir: Path) -> pd.DataFrame:
+    """
+    v9: Construye fact_minutes con minutos jugados por jugador x partido.
+
+    Logica:
+    - Titulares (Starting XI): minuto_entrada = 0.
+    - Sustitutos que entran: minuto_entrada = minuto del evento Substitution
+      donde substitution_replacement_id == player_id.
+    - Jugadores que salen por sustitucion: minuto_salida = minuto del evento.
+    - Jugadores que no salen: minuto_salida = ultimo minuto registrado en Half End
+      del partido (tipicamente 45 o 90 + descuento).
+    - minutos_jugados = minuto_salida - minuto_entrada (minimo 1 para evitar ceros).
+
+    Columnas output:
+      match_id, player_id, team_id, minuto_entrada, minuto_salida,
+      minutos_jugados, es_titular, fue_sustituido
+    """
+    raw_xi_path   = output_dir / "_starting_xi_raw.csv"
+    raw_sub_path  = output_dir / "_substitution_raw.csv"
+    raw_half_path = output_dir / "_half_end_raw.csv"
+
+    # Leer archivos raw; tolerar que no existan (primer run parcial)
+    df_xi   = read_csv_safe(raw_xi_path)   if raw_xi_path.exists()   else pd.DataFrame()
+    df_sub  = read_csv_safe(raw_sub_path)  if raw_sub_path.exists()  else pd.DataFrame()
+    df_half = read_csv_safe(raw_half_path) if raw_half_path.exists() else pd.DataFrame()
+
+    if df_xi.empty:
+        print("   Aviso: no hay datos de Starting XI; fact_minutes sera vacia.")
+        empty = pd.DataFrame(columns=["match_id", "player_id", "team_id",
+                                       "minuto_entrada", "minuto_salida",
+                                       "minutos_jugados", "es_titular", "fue_sustituido"])
+        save(empty, "fact_minutes", output_dir)
+        return empty
+
+    # --- Normalizar tipos ---
+    for df in [df_xi, df_sub, df_half]:
+        for col in ["match_id", "player_id", "team_id", "minute", "period"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # --- Ultimo minuto por partido (Half End, periodo 2 o el mayor disponible) ---
+    if not df_half.empty and "minute" in df_half.columns:
+        ultimo_minuto = (
+            df_half.groupby("match_id")["minute"]
+            .max()
+            .reset_index()
+            .rename(columns={"minute": "minuto_fin_partido"})
+        )
+    else:
+        ultimo_minuto = pd.DataFrame(columns=["match_id", "minuto_fin_partido"])
+
+    # --- Titulares ---
+    # Un evento Starting XI por equipo; el player_id es el del tecnico/equipo.
+    # Los jugadores titulares se identifican desde los lineups (all_lineups).
+    # Sin embargo, en StatsBomb el evento Starting XI no tiene player_id individual,
+    # sino tactics.lineup con la lista. Para simplificar y ser robustos,
+    # tomamos como titulares a los jugadores que aparecen en los lineups
+    # del partido pero NO aparecen como sustitutos que entran.
+    # Esto es correcto: lineup = plantel convocado; el que entra de cero es titular.
+
+    # Jugadores que ENTRAN como sustitutos: identificados por substitution_replacement_id
+    reemplazos_col = None
+    for col in ["substitution_replacement_id", "substitution_replacement"]:
+        if not df_sub.empty and col in df_sub.columns:
+            reemplazos_col = col
+            break
+
+    entradas_sub = pd.DataFrame()
+    salidas_sub = pd.DataFrame()
+
+    if not df_sub.empty and reemplazos_col is not None:
+        # El player_id del evento es quien SALE
+        salidas_sub = df_sub[["match_id", "player_id", "team_id", "minute"]].copy()
+        salidas_sub = salidas_sub.rename(columns={"player_id": "player_id_sale", "minute": "minuto_salida"})
+
+        # El reemplazante es quien ENTRA
+        df_sub["replacement_id"] = pd.to_numeric(
+            df_sub[reemplazos_col].astype(str).str.extract(r"(\d+)", expand=False),
+            errors="coerce"
+        )
+        entradas_sub = df_sub[df_sub["replacement_id"].notna()][["match_id", "replacement_id", "team_id", "minute"]].copy()
+        entradas_sub = entradas_sub.rename(columns={"replacement_id": "player_id", "minute": "minuto_entrada"})
+        entradas_sub["es_titular"] = 0
+        entradas_sub["fue_sustituido"] = 0  # el sustituto podria a su vez salir
+
+    # Necesitamos los lineups para saber los titulares.
+    # Los leemos desde dim_jugador o desde fact_minutes parciales.
+    # La forma mas directa: leer el CSV de dim_partido o los raw de XI.
+    # Usamos df_xi que tiene match_id y team_id al nivel de partido;
+    # para los player_ids de titulares leemos el _lineup_raw si existe,
+    # sino recurrimos a inferencia: todos los jugadores con eventos en el partido
+    # que no son sustitutos entrantes = titulares.
+
+    # Estrategia robusta: leer fact_pass u otro fact masivo para obtener
+    # (match_id, player_id, team_id) unicos, luego descontar sustitutos entrantes.
+    fact_ref_path = output_dir / "fact_pass.csv"
+    if not fact_ref_path.exists():
+        fact_ref_path = output_dir / "fact_shot.csv"
+    if not fact_ref_path.exists():
+        fact_ref_path = output_dir / "fact_pressure.csv"
+
+    if fact_ref_path.exists():
+        df_ref = read_csv_safe(fact_ref_path, usecols=["match_id", "player_id", "team_id"])
+        df_ref["match_id"] = pd.to_numeric(df_ref["match_id"], errors="coerce")
+        df_ref["player_id"] = pd.to_numeric(df_ref["player_id"], errors="coerce")
+        df_ref["team_id"] = pd.to_numeric(df_ref["team_id"], errors="coerce")
+        jugadores_por_partido = df_ref.dropna(subset=["match_id", "player_id"]).drop_duplicates(
+            subset=["match_id", "player_id"]
+        )
+    else:
+        jugadores_por_partido = pd.DataFrame(columns=["match_id", "player_id", "team_id"])
+
+    # Titulares = jugadores del partido que NO son sustitutos entrantes
+    subs_entrantes_ids = set()
+    if not entradas_sub.empty:
+        subs_entrantes_ids = set(
+            zip(entradas_sub["match_id"].astype(int), entradas_sub["player_id"].astype(int))
+        )
+
+    if not jugadores_por_partido.empty:
+        mask_titular = jugadores_por_partido.apply(
+            lambda r: (int(r["match_id"]), int(r["player_id"])) not in subs_entrantes_ids
+            if pd.notna(r["match_id"]) and pd.notna(r["player_id"]) else False,
+            axis=1
+        )
+        titulares = jugadores_por_partido[mask_titular].copy()
+        titulares["minuto_entrada"] = 0
+        titulares["es_titular"] = 1
+    else:
+        titulares = pd.DataFrame(columns=["match_id", "player_id", "team_id", "minuto_entrada", "es_titular"])
+
+    # --- Combinar titulares + sustitutos entrantes ---
+    frames = [titulares[["match_id", "player_id", "team_id", "minuto_entrada", "es_titular"]]]
+    if not entradas_sub.empty:
+        entradas_sub["es_titular"] = 0
+        frames.append(entradas_sub[["match_id", "player_id", "team_id", "minuto_entrada", "es_titular"]])
+
+    df_minutes = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["match_id", "player_id"])
+
+    # --- Agregar minuto de salida ---
+    # 1. Los que salen por sustitucion
+    if not salidas_sub.empty:
+        df_minutes = df_minutes.merge(
+            salidas_sub[["match_id", "player_id_sale", "minuto_salida"]].rename(
+                columns={"player_id_sale": "player_id"}
+            ),
+            on=["match_id", "player_id"],
+            how="left",
+        )
+        df_minutes["fue_sustituido"] = df_minutes["minuto_salida"].notna().astype(int)
+    else:
+        df_minutes["minuto_salida"] = np.nan
+        df_minutes["fue_sustituido"] = 0
+
+    # 2. Los que no salieron: usar ultimo minuto del partido
+    df_minutes = df_minutes.merge(ultimo_minuto, on="match_id", how="left")
+    df_minutes["minuto_fin_partido"] = df_minutes["minuto_fin_partido"].fillna(90)
+    df_minutes["minuto_salida"] = df_minutes["minuto_salida"].fillna(df_minutes["minuto_fin_partido"])
+
+    # --- Calcular minutos jugados ---
+    df_minutes["minuto_entrada"] = pd.to_numeric(df_minutes["minuto_entrada"], errors="coerce").fillna(0)
+    df_minutes["minuto_salida"] = pd.to_numeric(df_minutes["minuto_salida"], errors="coerce")
+    df_minutes["minutos_jugados"] = (df_minutes["minuto_salida"] - df_minutes["minuto_entrada"]).clip(lower=1).round(0).astype("Int64")
+
+    # --- Limpiar y exportar ---
+    df_minutes = df_minutes[["match_id", "player_id", "team_id",
+                              "minuto_entrada", "minuto_salida",
+                              "minutos_jugados", "es_titular", "fue_sustituido"]].copy()
+    df_minutes = df_minutes.dropna(subset=["player_id", "match_id"])
+    df_minutes["match_id"]  = df_minutes["match_id"].astype("Int64")
+    df_minutes["player_id"] = df_minutes["player_id"].astype("Int64")
+    df_minutes["team_id"]   = df_minutes["team_id"].astype("Int64")
+
+    save(df_minutes, "fact_minutes", output_dir)
+
+    # Eliminar archivos temporales raw
+    for tmp in [raw_xi_path, raw_sub_path, raw_half_path]:
+        if tmp.exists():
+            tmp.unlink()
+
+    return df_minutes
+
+
 def setup_plotting():
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from scipy import stats
-        return plt, stats
+        return plt
     except ImportError:
         install_if_missing("matplotlib")
-        install_if_missing("scipy")
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        from scipy import stats
-        return plt, stats
+        return plt
 
 
 def calcular_iqr(serie: pd.Series) -> dict:
@@ -932,64 +1210,13 @@ def fig_to_b64(fig, plt) -> str:
     return encoded
 
 
-def grafico_histograma(df, col, color, titulo_col, fondo, plt, stats) -> str:
-    if col not in df.columns:
-        return ""
-    datos = pd.to_numeric(df[col], errors="coerce").dropna()
-    if len(datos) < 5:
-        return ""
-    fig, ax = plt.subplots(figsize=(7, 4))
-    fig.patch.set_facecolor(fondo)
-    ax.set_facecolor(fondo)
-    ax.hist(datos, bins=min(40, max(5, len(datos) // 2)), color=color, alpha=0.7, edgecolor="white", linewidth=0.5)
-    if len(datos) > 10 and datos.std() > 0:
-        kde_x = np.linspace(datos.min(), datos.max(), 300)
-        kde = stats.gaussian_kde(datos)
-        ax2 = ax.twinx()
-        ax2.plot(kde_x, kde(kde_x), color=color, linewidth=2.5, alpha=0.9)
-        ax2.set_yticks([])
-        ax2.set_facecolor(fondo)
-    ax.axvline(datos.mean(), color="#333333", linestyle="--", linewidth=1.5, label=f"Media: {datos.mean():.2f}")
-    ax.axvline(datos.median(), color="#888888", linestyle=":", linewidth=1.5, label=f"Mediana: {datos.median():.2f}")
-    ax.set_title(f"Distribucion - {titulo_col}", fontsize=12, fontweight="bold")
-    ax.set_xlabel(titulo_col)
-    ax.set_ylabel("Frecuencia")
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=9, framealpha=0.7)
-    plt.tight_layout()
-    return fig_to_b64(fig, plt)
-
-
-def grafico_boxplot_multiple(df, cols, titulos, color, fondo, plt) -> str:
-    cols_ok = [c for c in cols if c in df.columns and pd.to_numeric(df[c], errors="coerce").dropna().shape[0] > 5]
-    if not cols_ok:
-        return ""
-    titulos_ok = [titulos[cols.index(c)] for c in cols_ok]
-    fig, axes = plt.subplots(1, len(cols_ok), figsize=(4 * len(cols_ok), 5))
-    fig.patch.set_facecolor(fondo)
-    if len(cols_ok) == 1:
-        axes = [axes]
-    for ax, col, titulo in zip(axes, cols_ok, titulos_ok):
-        datos = pd.to_numeric(df[col], errors="coerce").dropna()
-        ax.set_facecolor(fondo)
-        bp = ax.boxplot(datos, patch_artist=True, medianprops=dict(color="#333333", linewidth=2.5))
-        bp["boxes"][0].set_facecolor(color)
-        bp["boxes"][0].set_alpha(0.65)
-        ax.set_title(titulo, fontsize=10, fontweight="bold")
-        ax.set_xticks([])
-        ax.spines[["top", "right", "bottom"]].set_visible(False)
-    fig.suptitle("Boxplots - dispersion y outliers", fontsize=13, fontweight="bold", y=1.02)
-    plt.tight_layout()
-    return fig_to_b64(fig, plt)
-
-
 def grafico_scatter_valoracion(df, metrica, label_metrica, color, fondo, titulo, plt) -> str:
     """Compatibilidad legacy: el scatter ahora es interactivo en el HTML."""
     return ""
 
 
 def preparar_json_scatter(df: pd.DataFrame, cols_metricas: list[str], titulos_metricas: list[str]) -> str:
-    """Genera el JSON embebido para el scatter interactivo v7.
+    """Genera el JSON embebido para el scatter interactivo v8.
     Incluye todas las metricas del perfil para que el selector JS pueda cambiar el eje X."""
     col_val = "valor_mercado_promedio"
     registros = []
@@ -1008,6 +1235,26 @@ def preparar_json_scatter(df: pd.DataFrame, cols_metricas: list[str], titulos_me
                 rec[col] = round(float(row[col]), 2)
         if rec.get("vm") is not None:
             registros.append(rec)
+    meta = [{"col": c, "label": str(t)} for c, t in zip(cols_metricas, titulos_metricas)]
+    return json.dumps({"data": registros, "metricas": meta}, ensure_ascii=False)
+
+
+def preparar_json_histo_box(df: pd.DataFrame, cols_metricas: list[str], titulos_metricas: list[str]) -> str:
+    """Genera el JSON embebido para histogramas y boxplots interactivos v8."""
+    registros = []
+    df_work = df.copy()
+    for col in cols_metricas:
+        if col in df_work.columns:
+            df_work[col] = pd.to_numeric(df_work[col], errors="coerce")
+
+    for _, row in df_work.iterrows():
+        rec: dict = {}
+        for col in cols_metricas:
+            if col in row.index and pd.notna(row[col]):
+                rec[col] = round(float(row[col]), 2)
+        if rec:
+            registros.append(rec)
+
     meta = [{"col": c, "label": str(t)} for c, t in zip(cols_metricas, titulos_metricas)]
     return json.dumps({"data": registros, "metricas": meta}, ensure_ascii=False)
 
@@ -1140,28 +1387,17 @@ def generar_html_perfil(
     imgs_hist,
     img_box,
     img_hist_val,
-    img_scatter,        # ignorado en v6, se usa json_scatter
+    img_scatter,        # compatibilidad legacy, se usa json_scatter
     img_cuartiles,
     t_stats,
     t_iqr,
     t_universo,
     colores,
     hallazgos,
-    json_scatter="{}",  # nuevo parametro v7
+    json_scatter="{}",
+    json_histo_box="{}",
 ) -> str:
     c = colores
-    grids = "".join(
-        f"""<div class="chart-card"><h3>{esc_html(tit)}</h3><img src="data:image/png;base64,{img}"/></div>"""
-        for tit, img in zip(titulos_metricas, imgs_hist)
-        if img
-    )
-    if not grids:
-        grids = "<p>No hay datos suficientes para graficar este perfil.</p>"
-    img_box_block = (
-        f"""<img src="data:image/png;base64,{img_box}" class="wide-img"/>"""
-        if img_box
-        else "<p>No hay datos suficientes para boxplots.</p>"
-    )
     hist_val_block = (
         f"""<div class="chart-card"><h3>Distribucion de valor de mercado</h3><img src="data:image/png;base64,{img_hist_val}"/></div>"""
         if img_hist_val
@@ -1174,7 +1410,7 @@ def generar_html_perfil(
     )
     hallazgos_li = "".join(f"<li>{esc_html(h)}</li>" for h in hallazgos)
 
-    # Tabla de umbrales percentiles para criterios DAX
+    # Tabla de umbrales percentiles
     umbral_rows = ""
     for col, tit in zip(cols_metricas, titulos_metricas):
         if col in df_analitico.columns:
@@ -1195,12 +1431,210 @@ def generar_html_perfil(
     umbral_table = f"""
     <table class="tbl">
       <thead><tr style="background:{c['primario']};color:white">
-        <th>Metrica</th><th>P50</th><th>P75 - umbral DAX</th><th>P90</th><th>Cobertura</th>
+        <th>Metrica</th><th>P50</th><th>P75</th><th>P90</th><th>Cobertura</th>
       </tr></thead>
       <tbody>{umbral_rows}</tbody>
     </table>
-    <p style="font-size:.82rem;color:#666;margin-top:8px">El P75 es el umbral sugerido para filtrar candidatos en las medidas DAX. Cobertura = % de jugadores con valor &gt; 0 en esa metrica.</p>
+    <p style="font-size:.82rem;color:#666;margin-top:8px">P75 = umbral sugerido para filtrar candidatos en Power BI. Cobertura = % de jugadores con valor &gt; 0 en esa metrica.</p>
     """ if umbral_rows else "<p>Sin datos suficientes.</p>"
+
+    # Histograma + boxplot interactivos. El boxplot usa whiskers IQR y dibuja outliers.
+    histo_box_widget = f"""
+    <div class="chart-card span-2" style="padding:24px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <h3 style="margin:0">Distribucion y outliers</h3>
+        <label style="font-size:.88rem;color:#555">Metrica:
+          <select id="sel-metrica-hb" style="margin-left:6px;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:.88rem"></select>
+        </label>
+        <span id="hb-summary" style="font-size:.82rem;color:#666"></span>
+      </div>
+      <canvas id="histo-canvas" height="300" style="width:100%;margin-bottom:22px"></canvas>
+      <canvas id="box-canvas" height="210" style="width:100%"></canvas>
+    </div>
+    <script>
+    (function(){{
+      const RAW = {json_histo_box};
+      if(!RAW.data || RAW.data.length < 2 || !RAW.metricas || !RAW.metricas.length) return;
+      const DATA = RAW.data;
+      const METRICAS = RAW.metricas;
+      const COLOR = "{c['primario']}";
+      const sel = document.getElementById('sel-metrica-hb');
+      const summary = document.getElementById('hb-summary');
+      METRICAS.forEach(function(m){{
+        const o = document.createElement('option');
+        o.value = m.col; o.textContent = m.label;
+        sel.appendChild(o);
+      }});
+
+      const histoCanvas = document.getElementById('histo-canvas');
+      const boxCanvas = document.getElementById('box-canvas');
+      const histoCtx = histoCanvas.getContext('2d');
+      const boxCtx = boxCanvas.getContext('2d');
+
+      function hexToRgb(hex){{
+        const r = parseInt(hex.slice(1,3),16);
+        const g = parseInt(hex.slice(3,5),16);
+        const b = parseInt(hex.slice(5,7),16);
+        return r+','+g+','+b;
+      }}
+
+      function values(colKey){{
+        return DATA.map(function(d){{return d[colKey];}}).filter(function(v){{return Number.isFinite(v);}});
+      }}
+
+      function quantile(sorted, q){{
+        if(!sorted.length) return null;
+        const pos = (sorted.length - 1) * q;
+        const base = Math.floor(pos);
+        const rest = pos - base;
+        if(sorted[base + 1] !== undefined) return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+        return sorted[base];
+      }}
+
+      function stats(vals){{
+        const sorted = [...vals].sort(function(a,b){{return a-b;}});
+        const q1 = quantile(sorted, .25);
+        const q2 = quantile(sorted, .50);
+        const q3 = quantile(sorted, .75);
+        const iqr = q3 - q1;
+        const lowFence = q1 - 1.5 * iqr;
+        const highFence = q3 + 1.5 * iqr;
+        const inliers = sorted.filter(function(v){{return v >= lowFence && v <= highFence;}});
+        const outliers = sorted.filter(function(v){{return v < lowFence || v > highFence;}});
+        const mean = vals.reduce(function(a,b){{return a+b;}}, 0) / vals.length;
+        return {{
+          sorted: sorted,
+          min: sorted[0],
+          max: sorted[sorted.length - 1],
+          q1: q1,
+          q2: q2,
+          q3: q3,
+          iqr: iqr,
+          lower: inliers.length ? inliers[0] : sorted[0],
+          upper: inliers.length ? inliers[inliers.length - 1] : sorted[sorted.length - 1],
+          outliers: outliers,
+          mean: mean
+        }};
+      }}
+
+      function clear(ctx, canvas, height){{
+        const W = canvas.offsetWidth || canvas.clientWidth || 600;
+        canvas.width = W; canvas.height = height;
+        ctx.clearRect(0, 0, W, height);
+        return W;
+      }}
+
+      function drawEmpty(ctx, text, y){{
+        ctx.fillStyle = '#777';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(text, 40, y);
+      }}
+
+      function drawHistograma(colKey){{
+        const W = clear(histoCtx, histoCanvas, 300);
+        const vals = values(colKey);
+        if(vals.length < 2){{ drawEmpty(histoCtx, 'Datos insuficientes.', 150); return; }}
+        const st = stats(vals);
+        const min = st.min, max = st.max;
+        const range = max - min || 1;
+        const bins = Math.max(5, Math.min(30, Math.ceil(Math.sqrt(vals.length))));
+        const binSize = range / bins;
+        const counts = Array(bins).fill(0);
+        vals.forEach(function(v){{
+          let idx = Math.floor((v - min) / binSize);
+          if(idx >= bins) idx = bins - 1;
+          counts[idx]++;
+        }});
+
+        const maxCount = Math.max.apply(null, counts) || 1;
+        const pad = {{l:54,r:22,t:18,b:48}};
+        const W2 = W - pad.l - pad.r, H2 = 300 - pad.t - pad.b;
+        const rgb = hexToRgb(COLOR);
+        const toX = function(v){{return pad.l + ((v - min) / range) * W2;}};
+
+        histoCtx.strokeStyle = '#d1d5db'; histoCtx.lineWidth = 1;
+        histoCtx.beginPath(); histoCtx.moveTo(pad.l, pad.t); histoCtx.lineTo(pad.l, pad.t + H2); histoCtx.lineTo(pad.l + W2, pad.t + H2); histoCtx.stroke();
+
+        counts.forEach(function(cnt, i){{
+          const h = (cnt / maxCount) * H2;
+          const x = pad.l + (i / bins) * W2;
+          const w = Math.max(1, W2 / bins - 2);
+          histoCtx.fillStyle = 'rgba(' + rgb + ',0.68)';
+          histoCtx.fillRect(x, pad.t + H2 - h, w, h);
+        }});
+
+        histoCtx.setLineDash([]);
+        histoCtx.strokeStyle = '#333'; histoCtx.lineWidth = 1.6;
+        histoCtx.beginPath(); histoCtx.moveTo(toX(st.mean), pad.t); histoCtx.lineTo(toX(st.mean), pad.t + H2); histoCtx.stroke();
+        histoCtx.strokeStyle = '#777'; histoCtx.setLineDash([4,4]);
+        histoCtx.beginPath(); histoCtx.moveTo(toX(st.q2), pad.t); histoCtx.lineTo(toX(st.q2), pad.t + H2); histoCtx.stroke();
+        histoCtx.setLineDash([]);
+
+        histoCtx.fillStyle = '#555'; histoCtx.font = '11px Arial'; histoCtx.textAlign = 'center';
+        [0,.25,.5,.75,1].forEach(function(t){{
+          const xv = min + t * range;
+          histoCtx.fillText(xv.toFixed(1), toX(xv), pad.t + H2 + 17);
+        }});
+        histoCtx.fillText('Media ' + st.mean.toFixed(2), pad.l + W2 * .28, 286);
+        histoCtx.fillText('Mediana ' + st.q2.toFixed(2), pad.l + W2 * .72, 286);
+      }}
+
+      function drawBoxplot(colKey){{
+        const W = clear(boxCtx, boxCanvas, 210);
+        const vals = values(colKey);
+        if(vals.length < 2){{ drawEmpty(boxCtx, 'Datos insuficientes.', 105); return; }}
+        const st = stats(vals);
+        const scaleMin = Math.min(st.lower, st.min);
+        const scaleMax = Math.max(st.upper, st.max);
+        const range = scaleMax - scaleMin || 1;
+        const pad = {{l:58,r:26,t:20,b:42}};
+        const W2 = W - pad.l - pad.r, H2 = 210 - pad.t - pad.b;
+        const toX = function(v){{return pad.l + ((v - scaleMin) / range) * W2;}};
+        const y = pad.t + H2 / 2;
+        const boxH = 54;
+        const rgb = hexToRgb(COLOR);
+
+        boxCtx.strokeStyle = '#d1d5db'; boxCtx.lineWidth = 1;
+        boxCtx.beginPath(); boxCtx.moveTo(pad.l, y); boxCtx.lineTo(pad.l + W2, y); boxCtx.stroke();
+
+        boxCtx.strokeStyle = '#777'; boxCtx.lineWidth = 1.5;
+        boxCtx.beginPath(); boxCtx.moveTo(toX(st.lower), y); boxCtx.lineTo(toX(st.q1), y); boxCtx.moveTo(toX(st.q3), y); boxCtx.lineTo(toX(st.upper), y); boxCtx.stroke();
+        boxCtx.beginPath(); boxCtx.moveTo(toX(st.lower), y - 22); boxCtx.lineTo(toX(st.lower), y + 22); boxCtx.moveTo(toX(st.upper), y - 22); boxCtx.lineTo(toX(st.upper), y + 22); boxCtx.stroke();
+
+        boxCtx.fillStyle = 'rgba(' + rgb + ',0.48)';
+        boxCtx.strokeStyle = '#333'; boxCtx.lineWidth = 2;
+        boxCtx.fillRect(toX(st.q1), y - boxH / 2, Math.max(1, toX(st.q3) - toX(st.q1)), boxH);
+        boxCtx.strokeRect(toX(st.q1), y - boxH / 2, Math.max(1, toX(st.q3) - toX(st.q1)), boxH);
+
+        boxCtx.strokeStyle = '#111'; boxCtx.lineWidth = 2.5;
+        boxCtx.beginPath(); boxCtx.moveTo(toX(st.q2), y - boxH / 2); boxCtx.lineTo(toX(st.q2), y + boxH / 2); boxCtx.stroke();
+
+        boxCtx.fillStyle = '#b91c1c';
+        st.outliers.slice(0, 80).forEach(function(v){{
+          boxCtx.beginPath(); boxCtx.arc(toX(v), y, 3, 0, 2 * Math.PI); boxCtx.fill();
+        }});
+
+        boxCtx.fillStyle = '#555'; boxCtx.font = '11px Arial'; boxCtx.textAlign = 'center';
+        [0,.25,.5,.75,1].forEach(function(t){{
+          const xv = scaleMin + t * range;
+          boxCtx.fillText(xv.toFixed(1), toX(xv), pad.t + H2 + 28);
+        }});
+        boxCtx.textAlign = 'left';
+        boxCtx.fillText('Q1 ' + st.q1.toFixed(2) + ' | Q2 ' + st.q2.toFixed(2) + ' | Q3 ' + st.q3.toFixed(2) + ' | outliers ' + st.outliers.length, pad.l, 20);
+        summary.textContent = 'N=' + vals.length + ' | outliers IQR=' + st.outliers.length;
+      }}
+
+      function drawAll(){{
+        drawHistograma(sel.value);
+        drawBoxplot(sel.value);
+      }}
+
+      sel.addEventListener('change', drawAll);
+      drawAll();
+      window.addEventListener('resize', drawAll);
+    }})();
+    </script>"""
 
     # Scatter interactivo JS
     scatter_interactivo = f"""
@@ -1347,7 +1781,7 @@ def generar_html_perfil(
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>EDA v7 - {esc_html(perfil)}</title>
+<title>EDA v9 - {esc_html(perfil)}</title>
 <style>
   :root{{--p:{c['primario']};--s:{c['secundario']};--f:{c['fondo']};--a:{c['acento']};--txt:#1f2937;--b:#e5e7eb;}}
   *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--f);color:var(--txt);line-height:1.55}}
@@ -1367,13 +1801,13 @@ def generar_html_perfil(
 </head>
 <body>
 <div class="header">
-  <h1>EDA v7 - {esc_html(perfil)}</h1>
+  <h1>EDA v9 - {esc_html(perfil)}</h1>
   <p>{esc_html(subtitulo)}</p>
   <p><em>{esc_html(filosofia)}</em></p>
   <span class="badge">{len(df_analitico):,} jugadores analizados</span>
   <span class="badge">{len(cols_metricas)} metricas</span>
   <span class="badge">La Liga 2014-2017</span>
-  <span class="badge">Objetivo: criterios para DAX</span>
+  <span class="badge">Criterios para Power BI</span>
 </div>
 <div class="container">
   <div class="section">
@@ -1381,31 +1815,27 @@ def generar_html_perfil(
     <div class="card">{t_universo}</div>
   </div>
   <div class="section">
-    <div class="sec-title">2. Criterios para DAX — umbrales por percentil</div>
+    <div class="sec-title">2. Umbrales por percentil</div>
     <div class="card">{umbral_table}</div>
   </div>
   <div class="section">
-    <div class="sec-title">3. Distribuciones</div>
-    <div class="charts-grid">{grids}</div>
-  </div>
-  <div class="section">
-    <div class="sec-title">4. Estadisticos descriptivos</div>
+    <div class="sec-title">3. Estadisticas descriptivas</div>
     <div class="card" style="overflow-x:auto">{t_stats}</div>
   </div>
   <div class="section">
-    <div class="sec-title">5. Outliers IQR — alerta de distorsion en rankings</div>
+    <div class="sec-title">4. Outliers IQR - alerta de distorsion en rankings</div>
     <div class="card" style="overflow-x:auto">{t_iqr}</div>
   </div>
   <div class="section">
-    <div class="sec-title">6. Boxplots</div>
-    <div class="card">{img_box_block}</div>
+    <div class="sec-title">5. Distribuciones y boxplot IQR</div>
+    <div class="charts-grid">{histo_box_widget}</div>
   </div>
   <div class="section">
-    <div class="sec-title">7. Correlacion con valor de mercado</div>
+    <div class="sec-title">6. Correlacion con valor de mercado</div>
     <div class="charts-grid">{hist_val_block}{cuartiles_block}{scatter_interactivo}</div>
   </div>
   <div class="section">
-    <div class="sec-title">8. Notas para Power BI / DAX</div>
+    <div class="sec-title">7. Criterios accionables para Power BI</div>
     <div class="card"><ul>{hallazgos_li}</ul></div>
   </div>
 </div>
@@ -1426,7 +1856,7 @@ def valor_mercado_promedio(dim_valoracion: pd.DataFrame, player_ids) -> pd.DataF
 
 def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valoracion: pd.DataFrame) -> None:
     warnings.filterwarnings("ignore")
-    plt, stats = setup_plotting()
+    plt = setup_plotting()
     dim_jugador = require_columns(
         dim_jugador.copy(),
         ["player_id", "posicion_habitual", "equipo_habitual", "market_value_in_eur"],
@@ -1443,12 +1873,11 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
 
     def escribir_reporte(nombre_archivo, perfil, subtitulo, filosofia, df, cols, tits, color_key, metrica_principal, label_principal, hallazgos):
         c = COLORES[color_key]
-        imgs_hist = [grafico_histograma(df, col, c["primario"], tit, c["fondo"], plt, stats) for col, tit in zip(cols, tits)]
-        img_box = grafico_boxplot_multiple(df, cols, tits, c["primario"], c["fondo"], plt)
         img_hist_val = grafico_hist_valoracion(df["valor_mercado_promedio"], c["primario"], c["fondo"], plt)
-        img_scatter = ""  # v7: se conserva por compatibilidad; el scatter real es interactivo
+        img_scatter = ""  # compatibilidad legacy; el scatter real es interactivo
         img_cuartiles = grafico_boxplot_cuartiles(df, metrica_principal, c["primario"], c["fondo"], label_principal, plt)
         json_scatter = preparar_json_scatter(df, cols, tits)
+        json_histo_box = preparar_json_histo_box(df, cols, tits)
         html = generar_html_perfil(
             perfil,
             subtitulo,
@@ -1456,8 +1885,8 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
             df,
             cols,
             tits,
-            imgs_hist,
-            img_box,
+            [],
+            "",
             img_hist_val,
             img_scatter,
             img_cuartiles,
@@ -1467,6 +1896,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
             c,
             hallazgos,
             json_scatter=json_scatter,
+            json_histo_box=json_histo_box,
         )
         (output_dir / nombre_archivo).write_text(html, encoding="utf-8")
         print(f"   OK {nombre_archivo} - {len(df):,} jugadores")
@@ -1492,6 +1922,8 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     df_int = to_num(df_int, ["player_id", "location_x", "es_intercepcion_exitosa"])
     df_clear = completar(read_csv_safe(output_dir / "fact_clearance.csv", on_bad_lines="skip"), ["player_id", "clearance_aerial_won"])
     df_clear = to_num(df_clear, ["player_id", "clearance_aerial_won"])
+    df_drib = completar(read_csv_safe(output_dir / "fact_dribble.csv", on_bad_lines="skip"), ["player_id", "location_x", "es_dribble_exitoso"])
+    df_drib = to_num(df_drib, ["player_id", "location_x", "es_dribble_exitoso"])
 
     posiciones_del = {"Center Forward", "Left Wing", "Right Wing", "Left Center Forward", "Right Center Forward", "Secondary Striker"}
     players_del = dim_jugador_slim[dim_jugador_slim["posicion_habitual"].isin(posiciones_del)]["player_id"].unique()
@@ -1499,11 +1931,12 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     presiones = df_pres[df_pres["player_id"].isin(players_del) & (df_pres["location_x"] > 70)].groupby("player_id").size().reset_index(name="presiones_ultimo_tercio")
     duelos_cr = df_duel[df_duel["player_id"].isin(players_del) & (df_duel["location_x"] > 60) & (df_duel["es_duelo_ganado"] == 1)].groupby("player_id").size().reset_index(name="duelos_campo_rival")
     recepciones = df_recv[df_recv["player_id"].isin(players_del) & (df_recv["location_x"] > 60)].groupby("player_id").size().reset_index(name="recepciones_campo_rival")
-    df_del = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_del)].merge(xg_sp, on="player_id", how="left").merge(presiones, on="player_id", how="left").merge(duelos_cr, on="player_id", how="left").merge(recepciones, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_del), on="player_id", how="left").fillna(0)
-    cols_del = ["xg_sin_penal", "presiones_ultimo_tercio", "duelos_campo_rival", "recepciones_campo_rival"]
-    tits_del = ["xG sin penal", "Presiones ultimo tercio", "Duelos ganados campo rival", "Recepciones campo rival"]
+    dribbles = df_drib[df_drib["player_id"].isin(players_del) & (df_drib["location_x"] > 60) & (df_drib["es_dribble_exitoso"] == 1)].groupby("player_id").size().reset_index(name="dribbles_exitosos")
+    df_del = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_del)].merge(xg_sp, on="player_id", how="left").merge(presiones, on="player_id", how="left").merge(duelos_cr, on="player_id", how="left").merge(recepciones, on="player_id", how="left").merge(dribbles, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_del), on="player_id", how="left").fillna(0)
+    cols_del = ["xg_sin_penal", "presiones_ultimo_tercio", "duelos_campo_rival", "recepciones_campo_rival", "dribbles_exitosos"]
+    tits_del = ["xG sin penal", "Presiones ultimo tercio", "Duelos ganados campo rival", "Recepciones campo rival", "Dribbles exitosos"]
     escribir_reporte(
-        "eda_v7_delanteros.html",
+        "eda_v8_delanteros.html",
         "Delanteros",
         "9 falso cruyffista - presion, movilidad y xG sin penal.",
         "Atacantes que generan peligro, presionan alto y participan fuera del area.",
@@ -1515,7 +1948,8 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
         "xG sin penal",
         [
             f"Universo: {len(df_del)} delanteros. Umbral sugerido de xG: percentil 75 = {df_del['xg_sin_penal'].quantile(.75):.1f}.",
-            "Para DAX: score delantero = percentil(xG) * 0.4 + percentil(presiones) * 0.3 + percentil(recepciones) * 0.3.",
+            f"Dribbles exitosos: percentil 75 = {df_del['dribbles_exitosos'].quantile(.75):.0f}; indicador de desequilibrio y movilidad en campo rival.",
+            "Score sugerido en Power BI: percentil(xG) * 0.35 + percentil(presiones) * 0.25 + percentil(recepciones) * 0.20 + percentil(dribbles) * 0.20.",
         ],
     )
 
@@ -1531,7 +1965,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_mid = ["pases_progresivos", "ratio_pases_prog", "conducciones_progresivas", "pases_exitosos_bajo_presion", "perdidas_balon"]
     tits_mid = ["Pases progresivos", "Ratio pases progresivos", "Conducciones progresivas", "Pases exitosos bajo presion", "Perdidas de balon"]
     escribir_reporte(
-        "eda_v7_mediocampistas.html",
+        "eda_v8_mediocampistas.html",
         "Mediocampistas",
         "Entre lineas - progresion, presion y bajo error.",
         "Jugadores que aceleran el juego hacia adelante y resisten la presion.",
@@ -1543,7 +1977,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
         "Pases progresivos",
         [
             f"Universo: {len(df_mid)} mediocampistas. P75 pases progresivos = {df_mid['pases_progresivos'].quantile(.75):.0f}.",
-            "Para DAX: filtrar muestras con total_pases > 300 antes de rankear ratio_pases_prog.",
+            "En Power BI: filtrar jugadores con total_pases > 300 antes de rankear ratio_pases_prog.",
         ],
     )
 
@@ -1552,7 +1986,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     duelos_zona = df_duel[df_duel["player_id"].isin(players_def) & (df_duel["location_x"] > 40) & (df_duel["es_duelo_ganado"] == 1)].groupby("player_id").size().reset_index(name="duelos_zona_alta")
     intercep_cr = df_int[df_int["player_id"].isin(players_def) & (df_int["location_x"] > 60)].groupby("player_id").size().reset_index(name="intercepciones_campo_rival")
     pases_prog_def = df_pass[df_pass["player_id"].isin(players_def) & (df_pass["location_x"] < 40) & (df_pass["pass_end_x"] > df_pass["location_x"] + 15)].groupby("player_id").size().reset_index(name="pases_prog_desde_atras")
-    # v7: mantiene el reemplazo de despejes_aereos por un proxy mas consistente con el perfil.
+    # v8: mantiene el reemplazo de despejes_aereos por un proxy mas consistente con el perfil.
     # Proxy de "correccion a campo abierto": carries en zona media (x 35-65) con avance >= 8m.
     carrys_zona_media = df_carry[
         df_carry["player_id"].isin(players_def)
@@ -1563,7 +1997,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_def = ["duelos_zona_alta", "intercepciones_campo_rival", "pases_prog_desde_atras", "carrys_progresivos_zona_media"]
     tits_def = ["Duelos ganados zona alta", "Intercepciones campo rival", "Pases progresivos desde atras", "Carrys progresivos zona media"]
     escribir_reporte(
-        "eda_v7_defensores.html",
+        "eda_v8_defensores.html",
         "Defensores",
         "Libero moderno - zonas altas y salida limpia.",
         "Centrales que defienden lejos del arco, interceptan en avance y corrigen conduciendo.",
@@ -1575,9 +2009,9 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
         "Duelos ganados zona alta",
         [
             f"Universo: {len(df_def)} defensores. P75 duelos zona alta = {df_def['duelos_zona_alta'].quantile(.75):.0f}.",
-            f"P75 carrys_progresivos_zona_media = {df_def['carrys_progresivos_zona_media'].quantile(.75):.0f} — usar como umbral minimo DAX.",
-            "Para DAX: score defensor = duelos_zona_alta*0.35 + intercepciones_campo_rival*0.30 + pases_prog_desde_atras*0.20 + carrys_progresivos_zona_media*0.15.",
-            "v7: despejes_aereos se mantiene eliminado porque tiene datos insuficientes y contradice el perfil de central rapido buscado.",
+            f"P75 carrys_progresivos_zona_media = {df_def['carrys_progresivos_zona_media'].quantile(.75):.0f}; usar como umbral minimo en Power BI.",
+            "Score sugerido en Power BI: score defensor = duelos_zona_alta*0.35 + intercepciones_campo_rival*0.30 + pases_prog_desde_atras*0.20 + carrys_progresivos_zona_media*0.15.",
+            "v8: despejes_aereos se mantiene eliminado porque tiene datos insuficientes y contradice el perfil de central rapido buscado.",
         ],
     )
 
@@ -1591,7 +2025,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_lat = ["duelos_defensivos_ganados", "conducciones_hacia_centro", "pases_hacia_adentro", "presiones_en_banda"]
     tits_lat = ["Duelos defensivos ganados", "Conducciones hacia el centro", "Pases hacia adentro", "Presiones en banda"]
     escribir_reporte(
-        "eda_v7_laterales.html",
+        "eda_v8_laterales.html",
         "Laterales",
         "Lateral invertido - versatilidad y juego interior.",
         "Laterales firmes en el duelo y capaces de cerrarse hacia zonas interiores.",
@@ -1603,7 +2037,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
         "Conducciones hacia el centro",
         [
             f"Universo: {len(df_lat)} laterales. P75 duelos defensivos = {df_lat['duelos_defensivos_ganados'].quantile(.75):.0f}.",
-            "Para DAX: score lateral = duelos_defensivos_ganados * 0.30 + conducciones_hacia_centro * 0.35 + pases_hacia_adentro * 0.35.",
+            "Score sugerido en Power BI: score lateral = duelos_defensivos_ganados * 0.30 + conducciones_hacia_centro * 0.35 + pases_hacia_adentro * 0.35.",
         ],
     )
 
@@ -1615,13 +2049,13 @@ def zip_output(output_dir: Path, zip_name: str) -> Path:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pipeline de scouting v7 corregido.")
+    parser = argparse.ArgumentParser(description="Pipeline de scouting v8.")
     parser.add_argument("--repo-path", type=Path, default=Path("open-data/data"), help="Ruta a open-data/data de StatsBomb.")
     parser.add_argument("--tm-path", type=Path, default=Path("transfermarkt_data"), help="Ruta a CSVs de Transfermarkt.")
-    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v7_output"), help="Carpeta de salida.")
+    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v8_output"), help="Carpeta de salida.")
     parser.add_argument("--download-data", action="store_true", help="Descarga StatsBomb open-data y Transfermarkt via Kaggle.")
     parser.add_argument("--skip-eda", action="store_true", help="Genera solo CSV, sin reportes HTML.")
-    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v7_final.zip.")
+    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v8_final.zip.")
     return parser.parse_args()
 
 
@@ -1642,7 +2076,7 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("  PIPELINE DE SCOUTING V7")
+    print("  PIPELINE DE SCOUTING V8")
     print("=" * 60)
 
     print("\n-- BLOQUE 1: Carga Transfermarkt")
@@ -1665,6 +2099,9 @@ def main() -> None:
     print("\n-- BLOQUE 5: Dimension calendario")
     build_calendario(args.output_dir)
 
+    print("\n-- BLOQUE 6: Minutos jugados por partido")
+    build_fact_minutes(args.output_dir)
+
     if not args.skip_eda:
         generar_reportes_eda(args.output_dir, dim_jugador, dim_valoracion)
 
@@ -1673,14 +2110,14 @@ def main() -> None:
     total_mb = sum(f.stat().st_size for f in csvs + htmls) / 1024 / 1024
 
     print("\n" + "=" * 60)
-    print("  PIPELINE V7 COMPLETADO")
+    print("  PIPELINE V9 COMPLETADO")
     print("=" * 60)
     print(f"\n  {len(csvs)} archivos CSV en ./{args.output_dir}/")
     print(f"  {len(htmls)} reportes HTML en ./{args.output_dir}/")
     print(f"  Tamano total: {total_mb:.1f} MB")
 
     if args.zip:
-        zip_path = zip_output(args.output_dir, "scouting_v7_final")
+        zip_path = zip_output(args.output_dir, "scouting_v9_final")
         print(f"  ZIP generado: {zip_path}")
 
     print(
@@ -1691,12 +2128,15 @@ def main() -> None:
   - fact_pressure, fact_interception, fact_clearance
   - fact_ball_receipt, fact_goalkeeper, fact_foul_committed
   - fact_foul_won, fact_miscontrol, fact_block
+  - fact_minutes  [v9: minutos jugados por jugador x partido]
 
   POWER BI:
   - Importar CSV con separador ';' y decimal ','
   - dim_calendario[Date] -> dim_partido[match_date]
   - dim_jugador[player_id] -> fact_*[player_id]
   - dim_partido[match_id] -> fact_*[match_id]
+  - fact_minutes[match_id] -> dim_partido[match_id]
+  - fact_minutes[player_id] -> dim_jugador[player_id]
 """
     )
 
