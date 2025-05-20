@@ -1,6 +1,6 @@
 """
 ========================================================
-  PIPELINE DE SCOUTING V9
+  PIPELINE DE SCOUTING V10
   StatsBomb open-data + Transfermarkt Kaggle
 
   Entorno: La Liga | 2014/15, 2015/16, 2016/17
@@ -60,6 +60,13 @@
        7. Criterios accionables para Power BI
    25. TERMINOLOGIA LIMPIA: se elimina toda referencia a "DAX" en titulos,
        badges y textos del reporte HTML. Se usa "Power BI" o criterios accionables.
+
+  Cambios v10 (schema rectangular + flags 0/1):
+   26. SCHEMA CANONICO POR FACT: cada chunk se reindexa con columnas esperadas
+       antes del append incremental, evitando CSV ragged y columnas desalineadas.
+   27. FLAGS DERIVADOS SIEMPRE PRESENTES: es_dribble_exitoso, es_duelo_ganado,
+       es_pase_completo, es_recepcion_exitosa y equivalentes se generan con
+       default explicito y se exportan como enteros 0/1.
 ========================================================
 """
 
@@ -105,7 +112,7 @@ EVENTOS_OBJETIVO = {
     "Foul Won",
     "Miscontrol",
     "Block",
-    # v9: eventos de tiempo de juego para fact_minutes
+    # Eventos de tiempo de juego para fact_minutes
     "Starting XI",
     "Substitution",
     "Half End",
@@ -206,7 +213,7 @@ COLS_EVENTO = {
     "Foul Won": ["foul_won_advantage", "foul_won_defensive", "duration"],
     "Miscontrol": ["miscontrol_aerial_won", "duration"],
     "Block": ["block_deflection", "duration"],
-    # v9: columnas para calculo de minutos jugados
+    # Columnas para calculo de minutos jugados
     "Starting XI": ["tactics"],
     "Substitution": ["substitution_outcome", "substitution_replacement"],
     "Half End": [],
@@ -227,7 +234,7 @@ NOMBRE_ARCHIVO = {
     "Foul Won": "fact_foul_won",
     "Miscontrol": "fact_miscontrol",
     "Block": "fact_block",
-    # v9: no se routean a CSV incremental; se procesan en build_fact_minutes
+    # No se routean a CSV incremental; se procesan en build_fact_minutes
     "Starting XI": "_starting_xi_raw",
     "Substitution": "_substitution_raw",
     "Half End": "_half_end_raw",
@@ -263,6 +270,35 @@ BOOL_FLAG_COLS = {
     "foul_won_defensive",
     "miscontrol_aerial_won",
     "block_deflection",
+}
+
+DERIVED_FLAG_COLS = {
+    "es_pase_completo",
+    "es_asistencia_gol",
+    "es_asistencia_tiro",
+    "es_gol",
+    "es_al_arco",
+    "es_duelo_ganado",
+    "es_dribble_exitoso",
+    "es_intercepcion_exitosa",
+    "es_recepcion_exitosa",
+}
+
+DERIVED_COLS_EVENTO = {
+    "Pass": ["es_pase_completo", "es_asistencia_gol", "es_asistencia_tiro"],
+    "Shot": ["es_gol", "es_al_arco"],
+    "Duel": ["es_duelo_ganado"],
+    "Dribble": ["es_dribble_exitoso"],
+    "Interception": ["es_intercepcion_exitosa"],
+    "Ball Receipt*": ["es_recepcion_exitosa"],
+}
+
+SPLIT_LOCATION_COLS = {
+    "location": ["location_x", "location_y"],
+    "pass_end_location": ["pass_end_x", "pass_end_y"],
+    "shot_end_location": ["shot_end_x", "shot_end_y"],
+    "carry_end_location": ["carry_end_x", "carry_end_y"],
+    "goalkeeper_end_location": ["gk_end_x", "gk_end_y"],
 }
 
 COLORES = {
@@ -394,6 +430,27 @@ def flags_to_int(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     return df
 
 
+def canonical_fact_cols(tipo: str) -> list[str]:
+    cols: list[str] = []
+    for col in CONTEXTO + COLS_EVENTO.get(tipo, []):
+        cols.extend(SPLIT_LOCATION_COLS.get(col, [col]))
+    if tipo == "Carry":
+        cols.append("carry_distancia")
+    cols.extend(DERIVED_COLS_EVENTO.get(tipo, []))
+    return list(dict.fromkeys(cols))
+
+
+def enforce_fact_schema(df: pd.DataFrame, tipo: str) -> pd.DataFrame:
+    cols = canonical_fact_cols(tipo)
+    df = df.reindex(columns=cols)
+    flag_cols = [
+        col
+        for col in cols
+        if col in BOOL_FLAG_COLS or col in DERIVED_FLAG_COLS or col.startswith("es_")
+    ]
+    return flags_to_int(df, flag_cols)
+
+
 def serie_vacia(index=None, dtype="float64") -> pd.Series:
     return pd.Series(index=index, dtype=dtype)
 
@@ -522,10 +579,18 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
     if tipo == "Pass":
         if "pass_outcome" in subset.columns:
             subset["es_pase_completo"] = subset["pass_outcome"].isna().astype(int)
-        if "pass_goal_assist" in subset.columns:
-            subset["es_asistencia_gol"] = (subset["pass_goal_assist"] == True).astype(int)
-        if "pass_shot_assist" in subset.columns:
-            subset["es_asistencia_tiro"] = (subset["pass_shot_assist"] == True).astype(int)
+        else:
+            subset["es_pase_completo"] = 1
+        subset["es_asistencia_gol"] = (
+            (subset["pass_goal_assist"] == True).astype(int)
+            if "pass_goal_assist" in subset.columns
+            else 0
+        )
+        subset["es_asistencia_tiro"] = (
+            (subset["pass_shot_assist"] == True).astype(int)
+            if "pass_shot_assist" in subset.columns
+            else 0
+        )
         subset = split_location(subset, "location", "location")
         subset = split_location(subset, "pass_end_location", "pass_end")
 
@@ -533,6 +598,9 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
         if "shot_outcome" in subset.columns:
             subset["es_gol"] = (subset["shot_outcome"] == "Goal").astype(int)
             subset["es_al_arco"] = subset["shot_outcome"].isin(["Goal", "Saved"]).astype(int)
+        else:
+            subset["es_gol"] = 0
+            subset["es_al_arco"] = 0
         subset = split_location(subset, "location", "location")
         subset = split_location(subset, "shot_end_location", "shot_end")
 
@@ -554,21 +622,36 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
     else:
         subset = split_location(subset, "location", "location")
 
-    if tipo == "Duel" and "duel_outcome" in subset.columns:
-        subset["es_duelo_ganado"] = subset["duel_outcome"].isin(
-            {"Won", "Success", "Success In Play", "Success Out"}
-        ).astype(int)
-    elif tipo == "Dribble" and "dribble_outcome" in subset.columns:
-        subset["es_dribble_exitoso"] = (subset["dribble_outcome"] == "Complete").astype(int)
-    elif tipo == "Interception" and "interception_outcome" in subset.columns:
-        subset["es_intercepcion_exitosa"] = subset["interception_outcome"].isin(
-            {"Won", "Success", "Success In Play", "Success Out"}
-        ).astype(int)
-    elif tipo == "Ball Receipt*" and "ball_receipt_outcome" in subset.columns:
-        subset["es_recepcion_exitosa"] = subset["ball_receipt_outcome"].isna().astype(int)
+    if tipo == "Duel":
+        subset["es_duelo_ganado"] = (
+            subset["duel_outcome"]
+            .isin({"Won", "Success", "Success In Play", "Success Out"})
+            .astype(int)
+            if "duel_outcome" in subset.columns
+            else 0
+        )
+    elif tipo == "Dribble":
+        subset["es_dribble_exitoso"] = (
+            (subset["dribble_outcome"] == "Complete").astype(int)
+            if "dribble_outcome" in subset.columns
+            else 0
+        )
+    elif tipo == "Interception":
+        subset["es_intercepcion_exitosa"] = (
+            subset["interception_outcome"]
+            .isin({"Won", "Success", "Success In Play", "Success Out"})
+            .astype(int)
+            if "interception_outcome" in subset.columns
+            else 0
+        )
+    elif tipo == "Ball Receipt*":
+        subset["es_recepcion_exitosa"] = (
+            subset["ball_receipt_outcome"].isna().astype(int)
+            if "ball_receipt_outcome" in subset.columns
+            else 1
+        )
 
-    subset = flags_to_int(subset, safe_cols(subset, list(BOOL_FLAG_COLS)))
-    return subset
+    return enforce_fact_schema(subset, tipo)
 
 
 def cargar_transfermarkt(tm_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -985,7 +1068,7 @@ def build_calendario(output_dir: Path) -> pd.DataFrame:
 
 def build_fact_minutes(output_dir: Path) -> pd.DataFrame:
     """
-    v9: Construye fact_minutes con minutos jugados por jugador x partido.
+    Construye fact_minutes con minutos jugados por jugador x partido.
 
     Logica:
     - Titulares (Starting XI): minuto_entrada = 0.
@@ -1216,7 +1299,7 @@ def grafico_scatter_valoracion(df, metrica, label_metrica, color, fondo, titulo,
 
 
 def preparar_json_scatter(df: pd.DataFrame, cols_metricas: list[str], titulos_metricas: list[str]) -> str:
-    """Genera el JSON embebido para el scatter interactivo v8.
+    """Genera el JSON embebido para el scatter interactivo.
     Incluye todas las metricas del perfil para que el selector JS pueda cambiar el eje X."""
     col_val = "valor_mercado_promedio"
     registros = []
@@ -1240,7 +1323,7 @@ def preparar_json_scatter(df: pd.DataFrame, cols_metricas: list[str], titulos_me
 
 
 def preparar_json_histo_box(df: pd.DataFrame, cols_metricas: list[str], titulos_metricas: list[str]) -> str:
-    """Genera el JSON embebido para histogramas y boxplots interactivos v8."""
+    """Genera el JSON embebido para histogramas y boxplots interactivos."""
     registros = []
     df_work = df.copy()
     for col in cols_metricas:
@@ -1781,7 +1864,7 @@ def generar_html_perfil(
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>EDA v9 - {esc_html(perfil)}</title>
+<title>EDA v10 - {esc_html(perfil)}</title>
 <style>
   :root{{--p:{c['primario']};--s:{c['secundario']};--f:{c['fondo']};--a:{c['acento']};--txt:#1f2937;--b:#e5e7eb;}}
   *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--f);color:var(--txt);line-height:1.55}}
@@ -1801,7 +1884,7 @@ def generar_html_perfil(
 </head>
 <body>
 <div class="header">
-  <h1>EDA v9 - {esc_html(perfil)}</h1>
+  <h1>EDA v10 - {esc_html(perfil)}</h1>
   <p>{esc_html(subtitulo)}</p>
   <p><em>{esc_html(filosofia)}</em></p>
   <span class="badge">{len(df_analitico):,} jugadores analizados</span>
@@ -1936,7 +2019,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_del = ["xg_sin_penal", "presiones_ultimo_tercio", "duelos_campo_rival", "recepciones_campo_rival", "dribbles_exitosos"]
     tits_del = ["xG sin penal", "Presiones ultimo tercio", "Duelos ganados campo rival", "Recepciones campo rival", "Dribbles exitosos"]
     escribir_reporte(
-        "eda_v8_delanteros.html",
+        "eda_v10_delanteros.html",
         "Delanteros",
         "9 falso cruyffista - presion, movilidad y xG sin penal.",
         "Atacantes que generan peligro, presionan alto y participan fuera del area.",
@@ -1965,7 +2048,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_mid = ["pases_progresivos", "ratio_pases_prog", "conducciones_progresivas", "pases_exitosos_bajo_presion", "perdidas_balon"]
     tits_mid = ["Pases progresivos", "Ratio pases progresivos", "Conducciones progresivas", "Pases exitosos bajo presion", "Perdidas de balon"]
     escribir_reporte(
-        "eda_v8_mediocampistas.html",
+        "eda_v10_mediocampistas.html",
         "Mediocampistas",
         "Entre lineas - progresion, presion y bajo error.",
         "Jugadores que aceleran el juego hacia adelante y resisten la presion.",
@@ -1986,7 +2069,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     duelos_zona = df_duel[df_duel["player_id"].isin(players_def) & (df_duel["location_x"] > 40) & (df_duel["es_duelo_ganado"] == 1)].groupby("player_id").size().reset_index(name="duelos_zona_alta")
     intercep_cr = df_int[df_int["player_id"].isin(players_def) & (df_int["location_x"] > 60)].groupby("player_id").size().reset_index(name="intercepciones_campo_rival")
     pases_prog_def = df_pass[df_pass["player_id"].isin(players_def) & (df_pass["location_x"] < 40) & (df_pass["pass_end_x"] > df_pass["location_x"] + 15)].groupby("player_id").size().reset_index(name="pases_prog_desde_atras")
-    # v8: mantiene el reemplazo de despejes_aereos por un proxy mas consistente con el perfil.
+    # Mantiene el reemplazo de despejes_aereos por un proxy mas consistente con el perfil.
     # Proxy de "correccion a campo abierto": carries en zona media (x 35-65) con avance >= 8m.
     carrys_zona_media = df_carry[
         df_carry["player_id"].isin(players_def)
@@ -1997,7 +2080,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_def = ["duelos_zona_alta", "intercepciones_campo_rival", "pases_prog_desde_atras", "carrys_progresivos_zona_media"]
     tits_def = ["Duelos ganados zona alta", "Intercepciones campo rival", "Pases progresivos desde atras", "Carrys progresivos zona media"]
     escribir_reporte(
-        "eda_v8_defensores.html",
+        "eda_v10_defensores.html",
         "Defensores",
         "Libero moderno - zonas altas y salida limpia.",
         "Centrales que defienden lejos del arco, interceptan en avance y corrigen conduciendo.",
@@ -2011,7 +2094,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
             f"Universo: {len(df_def)} defensores. P75 duelos zona alta = {df_def['duelos_zona_alta'].quantile(.75):.0f}.",
             f"P75 carrys_progresivos_zona_media = {df_def['carrys_progresivos_zona_media'].quantile(.75):.0f}; usar como umbral minimo en Power BI.",
             "Score sugerido en Power BI: score defensor = duelos_zona_alta*0.35 + intercepciones_campo_rival*0.30 + pases_prog_desde_atras*0.20 + carrys_progresivos_zona_media*0.15.",
-            "v8: despejes_aereos se mantiene eliminado porque tiene datos insuficientes y contradice el perfil de central rapido buscado.",
+            "Despejes aereos se mantiene eliminado porque tiene datos insuficientes y contradice el perfil de central rapido buscado.",
         ],
     )
 
@@ -2025,7 +2108,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_lat = ["duelos_defensivos_ganados", "conducciones_hacia_centro", "pases_hacia_adentro", "presiones_en_banda"]
     tits_lat = ["Duelos defensivos ganados", "Conducciones hacia el centro", "Pases hacia adentro", "Presiones en banda"]
     escribir_reporte(
-        "eda_v8_laterales.html",
+        "eda_v10_laterales.html",
         "Laterales",
         "Lateral invertido - versatilidad y juego interior.",
         "Laterales firmes en el duelo y capaces de cerrarse hacia zonas interiores.",
@@ -2049,13 +2132,13 @@ def zip_output(output_dir: Path, zip_name: str) -> Path:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pipeline de scouting v8.")
+    parser = argparse.ArgumentParser(description="Pipeline de scouting v10.")
     parser.add_argument("--repo-path", type=Path, default=Path("open-data/data"), help="Ruta a open-data/data de StatsBomb.")
     parser.add_argument("--tm-path", type=Path, default=Path("transfermarkt_data"), help="Ruta a CSVs de Transfermarkt.")
-    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v8_output"), help="Carpeta de salida.")
+    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v10_output"), help="Carpeta de salida.")
     parser.add_argument("--download-data", action="store_true", help="Descarga StatsBomb open-data y Transfermarkt via Kaggle.")
     parser.add_argument("--skip-eda", action="store_true", help="Genera solo CSV, sin reportes HTML.")
-    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v8_final.zip.")
+    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v10_final.zip.")
     return parser.parse_args()
 
 
@@ -2076,7 +2159,7 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("  PIPELINE DE SCOUTING V8")
+    print("  PIPELINE DE SCOUTING V10")
     print("=" * 60)
 
     print("\n-- BLOQUE 1: Carga Transfermarkt")
@@ -2110,14 +2193,14 @@ def main() -> None:
     total_mb = sum(f.stat().st_size for f in csvs + htmls) / 1024 / 1024
 
     print("\n" + "=" * 60)
-    print("  PIPELINE V9 COMPLETADO")
+    print("  PIPELINE V10 COMPLETADO")
     print("=" * 60)
     print(f"\n  {len(csvs)} archivos CSV en ./{args.output_dir}/")
     print(f"  {len(htmls)} reportes HTML en ./{args.output_dir}/")
     print(f"  Tamano total: {total_mb:.1f} MB")
 
     if args.zip:
-        zip_path = zip_output(args.output_dir, "scouting_v9_final")
+        zip_path = zip_output(args.output_dir, "scouting_v10_final")
         print(f"  ZIP generado: {zip_path}")
 
     print(
@@ -2128,7 +2211,7 @@ def main() -> None:
   - fact_pressure, fact_interception, fact_clearance
   - fact_ball_receipt, fact_goalkeeper, fact_foul_committed
   - fact_foul_won, fact_miscontrol, fact_block
-  - fact_minutes  [v9: minutos jugados por jugador x partido]
+  - fact_minutes  [minutos jugados por jugador x partido]
 
   POWER BI:
   - Importar CSV con separador ';' y decimal ','
