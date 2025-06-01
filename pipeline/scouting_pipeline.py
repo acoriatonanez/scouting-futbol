@@ -1,6 +1,6 @@
 """
 ========================================================
-  PIPELINE DE SCOUTING V10
+  PIPELINE DE SCOUTING V11
   StatsBomb open-data + Transfermarkt Kaggle
 
   Entorno: La Liga | 2014/15, 2015/16, 2016/17
@@ -67,6 +67,12 @@
    27. FLAGS DERIVADOS SIEMPRE PRESENTES: es_dribble_exitoso, es_duelo_ganado,
        es_pase_completo, es_recepcion_exitosa y equivalentes se generan con
        default explicito y se exportan como enteros 0/1.
+
+  Cambios v11 (valoraciones historicas Transfermarkt):
+   28. DIM_VALORACION usa el pico de market_value_in_eur entre 2014-07-01 y
+       2017-06-30 desde player_valuations.csv, no el snapshot actual.
+   29. MATCH DE VALORACIONES: fuzzy dedicado contra players.csv con umbral 88
+       y diagnostico para Gerard Pique, Ivan Rakitic y Jordi Alba.
 ========================================================
 """
 
@@ -656,19 +662,25 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
 
 def cargar_transfermarkt(tm_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     tm_players = pd.read_csv(tm_path / "players.csv", low_memory=False)
-    tm_players = tm_players[
-        [
-            "player_id",
-            "name",
-            "date_of_birth",
-            "country_of_citizenship",
-            "sub_position",
-            "foot",
-            "height_in_cm",
-            "market_value_in_eur",
-            "highest_market_value_in_eur",
-        ]
-    ].rename(columns={"player_id": "tm_player_id", "name": "tm_name"})
+    base_cols = [
+        "player_id",
+        "name",
+        "date_of_birth",
+        "country_of_citizenship",
+        "country_of_birth",
+        "sub_position",
+        "position",
+        "foot",
+        "height_in_cm",
+        "market_value_in_eur",
+        "highest_market_value_in_eur",
+    ]
+    tm_players = require_columns(tm_players, base_cols)
+    tm_players = tm_players[base_cols].rename(columns={"player_id": "tm_player_id", "name": "tm_name"})
+    if "country_of_citizenship" not in tm_players.columns or tm_players["country_of_citizenship"].isna().all():
+        tm_players["country_of_citizenship"] = tm_players["country_of_birth"]
+    if "sub_position" not in tm_players.columns or tm_players["sub_position"].isna().all():
+        tm_players["sub_position"] = tm_players["position"]
 
     for col in ["height_in_cm", "market_value_in_eur", "highest_market_value_in_eur"]:
         tm_players[col] = pd.to_numeric(tm_players[col], errors="coerce")
@@ -959,10 +971,146 @@ def matching_jugadores(
     return merge_final
 
 
+def build_dim_valoracion_historica(
+    dim_jugador: pd.DataFrame,
+    tm_players: pd.DataFrame,
+    tm_valuations: pd.DataFrame,
+) -> pd.DataFrame:
+    val_cols = [
+        "player_id",
+        "tm_player_id",
+        "date",
+        "market_value_in_eur",
+        "current_club_name",
+        "player_club_domestic_competition_id",
+    ]
+    if dim_jugador.empty or tm_players.empty or tm_valuations.empty:
+        return pd.DataFrame(columns=val_cols)
+
+    try:
+        from rapidfuzz import fuzz
+        token_set_ratio = fuzz.token_set_ratio
+    except ImportError:
+        from difflib import SequenceMatcher
+
+        def token_set_ratio(a: str, b: str) -> float:
+            a_tokens = set(a.split())
+            b_tokens = set(b.split())
+            common = " ".join(sorted(a_tokens & b_tokens))
+            a_diff = " ".join(sorted(a_tokens - b_tokens))
+            b_diff = " ".join(sorted(b_tokens - a_tokens))
+            left = " ".join(part for part in [common, a_diff] if part)
+            right = " ".join(part for part in [common, b_diff] if part)
+            return SequenceMatcher(None, left, right).ratio() * 100
+
+    vals = tm_valuations.copy()
+    vals["date"] = pd.to_datetime(vals["date"], errors="coerce")
+    vals["market_value_in_eur"] = pd.to_numeric(vals["market_value_in_eur"], errors="coerce")
+    vals = vals[
+        (vals["date"] >= FECHAS_INICIO)
+        & (vals["date"] <= FECHAS_FIN)
+        & vals["market_value_in_eur"].notna()
+    ].copy()
+    if vals.empty:
+        return pd.DataFrame(columns=val_cols)
+
+    vals = vals.sort_values(
+        ["tm_player_id", "market_value_in_eur", "date"],
+        ascending=[True, False, True],
+        na_position="last",
+    )
+    val_peak = vals.drop_duplicates("tm_player_id", keep="first")
+
+    players = tm_players.copy()
+    players["tm_player_id"] = pd.to_numeric(players["tm_player_id"], errors="coerce").astype("Int64")
+    players["nombre_norm"] = players["tm_name"].apply(normalizar)
+    tm_hist = (
+        players[["tm_player_id", "tm_name", "nombre_norm"]]
+        .dropna(subset=["tm_player_id"])
+        .merge(val_peak, on="tm_player_id", how="inner")
+    )
+    tm_hist = tm_hist[tm_hist["nombre_norm"] != ""].drop_duplicates("tm_player_id")
+    if tm_hist.empty:
+        return pd.DataFrame(columns=val_cols)
+
+    tm_names = tm_hist["nombre_norm"].tolist()
+    tm_by_name = tm_hist.sort_values("market_value_in_eur", ascending=False).drop_duplicates(
+        "nombre_norm", keep="first"
+    ).set_index("nombre_norm")
+
+    rows = []
+    diagnostics = {}
+    check_players = ["Gerard Pique", "Ivan Rakitic", "Jordi Alba"]
+
+    for _, sb in dim_jugador[["player_id", "player"]].drop_duplicates("player_id").iterrows():
+        sb_norm = normalizar(sb["player"])
+        best_score = 0
+        best_name = None
+        if sb_norm:
+            for tm_name in tm_names:
+                score = token_set_ratio(sb_norm, tm_name)
+                if score > best_score:
+                    best_score = score
+                    best_name = tm_name
+
+        row = {col: pd.NA for col in val_cols}
+        row["player_id"] = sb["player_id"]
+        if best_score >= 88 and best_name:
+            tm_row = tm_by_name.loc[best_name]
+            row["tm_player_id"] = tm_row["tm_player_id"]
+            row["date"] = tm_row["date"]
+            row["market_value_in_eur"] = tm_row["market_value_in_eur"]
+            row["current_club_name"] = tm_row.get("current_club_name", pd.NA)
+            row["player_club_domestic_competition_id"] = tm_row.get(
+                "player_club_domestic_competition_id", pd.NA
+            )
+
+        for check in check_players:
+            if normalizar(check) == sb_norm:
+                tm_name_out = tm_by_name.loc[best_name]["tm_name"] if best_name in tm_by_name.index else pd.NA
+                diagnostics[check] = {
+                    "score": best_score,
+                    "tm_name": tm_name_out,
+                    "value": row["market_value_in_eur"],
+                }
+        rows.append(row)
+
+    dim_valoracion = pd.DataFrame(rows, columns=val_cols)
+    dim_valoracion["tm_player_id"] = pd.to_numeric(
+        dim_valoracion["tm_player_id"], errors="coerce"
+    ).astype("Int64")
+    dim_valoracion["market_value_in_eur"] = pd.to_numeric(
+        dim_valoracion["market_value_in_eur"], errors="coerce"
+    )
+    dim_valoracion["date"] = pd.to_datetime(dim_valoracion["date"], errors="coerce")
+    dim_valoracion["date"] = dim_valoracion["date"].fillna(pd.Timestamp("2016-01-01"))
+    dim_valoracion = dim_valoracion.sort_values(["player_id", "date"]).reset_index(drop=True)
+
+    print("   Check valoraciones historicas:")
+    for check in check_players:
+        info = diagnostics.get(check)
+        if not info:
+            print(f"      {check} -> sin jugador StatsBomb encontrado")
+            continue
+        value = info["value"]
+        if pd.isna(value):
+            print(f"      {check} -> sin match TM | score={info['score']:.1f}")
+        else:
+            print(
+                f"      {check} -> {value:,.0f} EUR | "
+                f"match={info['tm_name']} | score={info['score']:.1f}"
+            )
+            if value < 5_000_000:
+                print(f"      Aviso: {check} quedo por debajo de 5M; revisar match.")
+
+    return dim_valoracion
+
+
 def build_dimensiones(
     all_matches: list[dict],
     all_lineups: list[dict],
     merge_final: pd.DataFrame,
+    tm_players: pd.DataFrame,
     tm_valuations: pd.DataFrame,
     output_dir: Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -1023,23 +1171,7 @@ def build_dimensiones(
     dim_jugador["equipo_habitual"] = dim_jugador["equipo_habitual"].fillna("Desconocido")
     save(dim_jugador, "dim_jugador", output_dir)
 
-    id_map = merge_final[merge_final["tm_player_id"].notna()][["player_id", "tm_player_id"]].copy()
-    id_map["tm_player_id"] = pd.to_numeric(id_map["tm_player_id"], errors="coerce").astype("Int64")
-    id_map = id_map.drop_duplicates()
-
-    val_cols = [
-        "player_id",
-        "tm_player_id",
-        "date",
-        "market_value_in_eur",
-        "current_club_name",
-        "player_club_domestic_competition_id",
-    ]
-    dim_valoracion = tm_valuations.merge(id_map, on="tm_player_id", how="inner")
-    for col in val_cols:
-        if col not in dim_valoracion.columns:
-            dim_valoracion[col] = pd.NA
-    dim_valoracion = dim_valoracion[val_cols].sort_values(["player_id", "date"]).reset_index(drop=True)
+    dim_valoracion = build_dim_valoracion_historica(dim_jugador, tm_players, tm_valuations)
     save(dim_valoracion, "dim_valoracion", output_dir)
 
     return dim_partido, dim_jugador, dim_valoracion
@@ -1864,7 +1996,7 @@ def generar_html_perfil(
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>EDA v10 - {esc_html(perfil)}</title>
+<title>EDA v11 - {esc_html(perfil)}</title>
 <style>
   :root{{--p:{c['primario']};--s:{c['secundario']};--f:{c['fondo']};--a:{c['acento']};--txt:#1f2937;--b:#e5e7eb;}}
   *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--f);color:var(--txt);line-height:1.55}}
@@ -1884,7 +2016,7 @@ def generar_html_perfil(
 </head>
 <body>
 <div class="header">
-  <h1>EDA v10 - {esc_html(perfil)}</h1>
+  <h1>EDA v11 - {esc_html(perfil)}</h1>
   <p>{esc_html(subtitulo)}</p>
   <p><em>{esc_html(filosofia)}</em></p>
   <span class="badge">{len(df_analitico):,} jugadores analizados</span>
@@ -2019,7 +2151,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_del = ["xg_sin_penal", "presiones_ultimo_tercio", "duelos_campo_rival", "recepciones_campo_rival", "dribbles_exitosos"]
     tits_del = ["xG sin penal", "Presiones ultimo tercio", "Duelos ganados campo rival", "Recepciones campo rival", "Dribbles exitosos"]
     escribir_reporte(
-        "eda_v10_delanteros.html",
+        "eda_v11_delanteros.html",
         "Delanteros",
         "9 falso cruyffista - presion, movilidad y xG sin penal.",
         "Atacantes que generan peligro, presionan alto y participan fuera del area.",
@@ -2048,7 +2180,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_mid = ["pases_progresivos", "ratio_pases_prog", "conducciones_progresivas", "pases_exitosos_bajo_presion", "perdidas_balon"]
     tits_mid = ["Pases progresivos", "Ratio pases progresivos", "Conducciones progresivas", "Pases exitosos bajo presion", "Perdidas de balon"]
     escribir_reporte(
-        "eda_v10_mediocampistas.html",
+        "eda_v11_mediocampistas.html",
         "Mediocampistas",
         "Entre lineas - progresion, presion y bajo error.",
         "Jugadores que aceleran el juego hacia adelante y resisten la presion.",
@@ -2080,7 +2212,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_def = ["duelos_zona_alta", "intercepciones_campo_rival", "pases_prog_desde_atras", "carrys_progresivos_zona_media"]
     tits_def = ["Duelos ganados zona alta", "Intercepciones campo rival", "Pases progresivos desde atras", "Carrys progresivos zona media"]
     escribir_reporte(
-        "eda_v10_defensores.html",
+        "eda_v11_defensores.html",
         "Defensores",
         "Libero moderno - zonas altas y salida limpia.",
         "Centrales que defienden lejos del arco, interceptan en avance y corrigen conduciendo.",
@@ -2108,7 +2240,7 @@ def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valora
     cols_lat = ["duelos_defensivos_ganados", "conducciones_hacia_centro", "pases_hacia_adentro", "presiones_en_banda"]
     tits_lat = ["Duelos defensivos ganados", "Conducciones hacia el centro", "Pases hacia adentro", "Presiones en banda"]
     escribir_reporte(
-        "eda_v10_laterales.html",
+        "eda_v11_laterales.html",
         "Laterales",
         "Lateral invertido - versatilidad y juego interior.",
         "Laterales firmes en el duelo y capaces de cerrarse hacia zonas interiores.",
@@ -2132,13 +2264,13 @@ def zip_output(output_dir: Path, zip_name: str) -> Path:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pipeline de scouting v10.")
+    parser = argparse.ArgumentParser(description="Pipeline de scouting v11.")
     parser.add_argument("--repo-path", type=Path, default=Path("open-data/data"), help="Ruta a open-data/data de StatsBomb.")
     parser.add_argument("--tm-path", type=Path, default=Path("transfermarkt_data"), help="Ruta a CSVs de Transfermarkt.")
-    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v10_output"), help="Carpeta de salida.")
+    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v11_output"), help="Carpeta de salida.")
     parser.add_argument("--download-data", action="store_true", help="Descarga StatsBomb open-data y Transfermarkt via Kaggle.")
     parser.add_argument("--skip-eda", action="store_true", help="Genera solo CSV, sin reportes HTML.")
-    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v10_final.zip.")
+    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v11_final.zip.")
     return parser.parse_args()
 
 
@@ -2159,11 +2291,11 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("  PIPELINE DE SCOUTING V10")
+    print("  PIPELINE DE SCOUTING V11")
     print("=" * 60)
 
     print("\n-- BLOQUE 1: Carga Transfermarkt")
-    _, tm_players_match, tm_valuations = cargar_transfermarkt(args.tm_path)
+    tm_players, tm_players_match, tm_valuations = cargar_transfermarkt(args.tm_path)
     print(f"   OK tm_players_match: {len(tm_players_match):,} nombres unicos")
     print(f"   OK tm_valuations 2014-2017: {len(tm_valuations):,} registros")
 
@@ -2176,7 +2308,7 @@ def main() -> None:
 
     print("\n-- BLOQUE 4: Dimensiones")
     _, dim_jugador, dim_valoracion = build_dimensiones(
-        all_matches, all_lineups, merge_final, tm_valuations, args.output_dir
+        all_matches, all_lineups, merge_final, tm_players, tm_valuations, args.output_dir
     )
 
     print("\n-- BLOQUE 5: Dimension calendario")
@@ -2193,14 +2325,14 @@ def main() -> None:
     total_mb = sum(f.stat().st_size for f in csvs + htmls) / 1024 / 1024
 
     print("\n" + "=" * 60)
-    print("  PIPELINE V10 COMPLETADO")
+    print("  PIPELINE V11 COMPLETADO")
     print("=" * 60)
     print(f"\n  {len(csvs)} archivos CSV en ./{args.output_dir}/")
     print(f"  {len(htmls)} reportes HTML en ./{args.output_dir}/")
     print(f"  Tamano total: {total_mb:.1f} MB")
 
     if args.zip:
-        zip_path = zip_output(args.output_dir, "scouting_v10_final")
+        zip_path = zip_output(args.output_dir, "scouting_v11_final")
         print(f"  ZIP generado: {zip_path}")
 
     print(
