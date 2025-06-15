@@ -1,13 +1,13 @@
 """
 ========================================================
-  PIPELINE DE SCOUTING V11
+  PIPELINE DE SCOUTING V12
   StatsBomb open-data + Transfermarkt Kaggle
 
-  Entorno: La Liga | 2014/15, 2015/16, 2016/17
+  Entorno: La Liga | 2014/15 a 2019/20 (6 temporadas)
 
   Output:
-    - 19 CSV: 4 dimensiones + 15 tablas fact
-    - 4 reportes HTML de EDA por perfil
+    - 18 CSV: 4 dimensiones + 14 tablas fact
+    - 1 reporte HTML de conformidad
 
   Fixes principales v5:
     1. Sin comandos magicos de Colab dentro del pipeline.
@@ -69,28 +69,93 @@
        default explicito y se exportan como enteros 0/1.
 
   Cambios v11 (valoraciones historicas Transfermarkt):
-   28. DIM_VALORACION usa el pico de market_value_in_eur entre 2014-07-01 y
-       2017-06-30 desde player_valuations.csv, no el snapshot actual.
+   28. DIM_VALORACION usa el pico de market_value_in_eur entre FECHAS_INICIO y
+       FECHAS_FIN desde player_valuations.csv, no el snapshot actual.
    29. MATCH DE VALORACIONES: fuzzy dedicado contra players.csv con umbral 88
        y diagnostico para Gerard Pique, Ivan Rakitic y Jordi Alba.
+
+  Cambios v12 (6 temporadas + esquema reducido para Power BI):
+   30. TEMPORADAS: OBJETIVOS ahora cubre La Liga 2014/15 a 2019/20 (6
+       temporadas, season_id 26/27/2/1/4/42). Se excluye 2020/21 (COVID) y
+       las demas ligas europeas por tener una sola temporada disponible.
+       FECHAS_FIN pasa a 2020-06-30.
+   31. FACT_GOALKEEPER ELIMINADA: "Goal Keeper" se excluye de EVENTOS_OBJETIVO,
+       COLS_EVENTO y NOMBRE_ARCHIVO (mapeado a None). El universo de porteros
+       es insuficiente para rankings percentilados.
+   32. ESQUEMA REDUCIDO: COLS_EVENTO se recorta a las columnas necesarias para
+       Power BI. Las columnas *_outcome usadas para calcular flags derivados
+       (es_pase_completo, es_dribble_exitoso, etc.) viven en COLS_INTERNAS:
+       se incluyen en el subset de procesamiento pero no se exportan al CSV.
+   33. CONTEXTO REDUCIDO: se eliminan team, player, possession_team,
+       play_pattern, timestamp y counterpress (redundantes via FK a las
+       dimensiones). equipo_habitual en build_dimensiones() se deriva de
+       all_lineups en vez de fact_pass.
+   34. TRANSFERMARKT: se elimina highest_market_value_in_eur (snapshot poco
+       confiable); dim_valoracion ya cubre el pico historico.
+   35. MATCHING CON SCORE COMPUESTO: blocking por pais normalizado + score
+       0.60*nombre + 0.25*pais + 0.15*posicion (umbral 0.75). FUZZY_UMBRAL
+       queda deprecado.
+   36. REPORTE DE CONFORMIDAD: generar_reportes_eda() y sus graficos se
+       reemplazan por generar_reporte_conformidad(), que valida estructura
+       y cobertura del output (sin contenido analitico). --skip-eda pasa a
+       --skip-report.
+
+  Cambios v12.1 (recorte de columnas/tablas no usadas en el modelo DAX):
+   37. EVENTOS ELIMINADOS: Clearance, Foul Committed, Foul Won y Block ya
+       no se procesan (no aportan a ninguna medida DAX ni a la heatmap).
+       Dejan de generarse fact_clearance, fact_foul_committed, fact_foul_won
+       y fact_block.
+   38. CONTEXTO RECORTADO: se eliminan possession_team_id, period y second
+       de CONTEXTO (no se usan en ninguna medida ni relacion). Se mantienen
+       team_id, minute, under_pressure y position por conservadurismo
+       (uso potencial fuera del DAX documentado).
+   39. FACT_SHOT: se agrega shot_type a COLS_EVENTO, requerido por la medida
+       "xG Sin Penal" para excluir shot_type = "Penalty".
+   40. FACT_PASS: pass_recipient_id (columna que nunca se poblaba, ya que
+       flatten_event vuelca pass.recipient.name en "pass_recipient") se
+       reemplaza por pass_recipient, requerido por "Total Desmarques Ruptura".
+
+  Cambios v12.2 (matching StatsBomb-Transfermarkt mas fiel):
+   41. UNIVERSO LA LIGA: cargar_liga_player_ids() usa appearances.csv
+       (competition_id "ES1", FECHAS_INICIO-FECHAS_FIN) para identificar que
+       tm_player_id jugaron La Liga en las mismas temporadas. Blocking de alta
+       confianza, ya que StatsBomb y Transfermarkt cubren la misma poblacion.
+   42. DEDUP DE TM_PLAYERS_MATCH: ante nombres normalizados duplicados, se
+       prefiere el candidato del universo La Liga sobre el de mayor
+       market_value_in_eur (antes solo se usaba market_value).
+   43. MATCHING POR TIERS: matching_jugadores() ahora prueba, en orden,
+       (0) match exacto por apodo/player_nickname, (1) fuzzy dentro del
+       universo La Liga (umbral 0.65), (2) fuzzy por pais (umbral 0.75, como
+       antes), (3) fuzzy global sin blocking (umbral subido a 0.85, mas
+       exigente por ser el mas arriesgado).
+   44. POSICION REAL EN EL SCORE: se agrega compute_posicion_habitual()
+       (lee fact_pass.csv) y se pasa a matching_jugadores() ANTES del
+       matching. Corrige un bug donde _posicion_similar() siempre recibia ""
+       y el 15% de peso por posicion no aportaba nada.
+   45. METODO_MATCH: nueva columna diagnostica en dim_jugador que indica como
+       se resolvio cada match (exacto_nombre, exacto_apodo, fuzzy_liga,
+       fuzzy_pais, fuzzy_global o nulo si no hubo match).
+   46. DIM_VALORACION UNIFICADA: build_dim_valoracion_historica() deja de
+       hacer un segundo matching fuzzy por nombre (token_set_ratio >= 88) y
+       reutiliza dim_jugador["tm_player_id"]. Antes dim_jugador y
+       dim_valoracion podian apuntar a distintas personas de Transfermarkt
+       para el mismo player_id.
 ========================================================
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import csv
 import html
-import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 import unicodedata
-import warnings
 from pathlib import Path
 
 import numpy as np
@@ -101,6 +166,9 @@ OBJETIVOS = [
     {"competition_id": 11, "season_id": 26, "nombre": "La Liga 2014/15"},
     {"competition_id": 11, "season_id": 27, "nombre": "La Liga 2015/16"},
     {"competition_id": 11, "season_id": 2, "nombre": "La Liga 2016/17"},
+    {"competition_id": 11, "season_id": 1, "nombre": "La Liga 2017/18"},
+    {"competition_id": 11, "season_id": 4, "nombre": "La Liga 2018/19"},
+    {"competition_id": 11, "season_id": 42, "nombre": "La Liga 2019/20"},
 ]
 
 EVENTOS_OBJETIVO = {
@@ -111,13 +179,8 @@ EVENTOS_OBJETIVO = {
     "Carry",
     "Pressure",
     "Interception",
-    "Clearance",
     "Ball Receipt*",
-    "Goal Keeper",
-    "Foul Committed",
-    "Foul Won",
     "Miscontrol",
-    "Block",
     # Eventos de tiempo de juego para fact_minutes
     "Starting XI",
     "Substitution",
@@ -125,104 +188,54 @@ EVENTOS_OBJETIVO = {
 }
 
 FECHAS_INICIO = "2014-07-01"
-FECHAS_FIN = "2017-06-30"
-FUZZY_UMBRAL = 85
+FECHAS_FIN = "2020-06-30"
 
 CONTEXTO = [
     "match_id",
     "player_id",
-    "player",
     "team_id",
-    "team",
-    "position",
-    "period",
     "minute",
-    "second",
-    "timestamp",
     "location",
     "under_pressure",
-    "counterpress",
-    "play_pattern",
-    "possession_team_id",
-    "possession_team",
+    "position",  # necesario para posicion_habitual en build_dimensiones()
 ]
 
 COLS_EVENTO = {
     "Pass": [
-        "pass_length",
-        "pass_angle",
-        "pass_body_part",
-        "pass_height",
-        "pass_technique",
-        "pass_type",
-        "pass_outcome",
         "pass_end_location",
-        "pass_recipient_id",
         "pass_recipient",
         "pass_shot_assist",
         "pass_goal_assist",
         "pass_cross",
         "pass_switch",
         "pass_through_ball",
-        "pass_aerial_won",
-        "pass_miscommunication",
-        "pass_deflected",
-        "pass_inswinging",
-        "pass_outswinging",
-        "pass_straight",
-        "pass_cut_back",
-        "pass_no_touch",
-        "duration",
     ],
     "Shot": [
         "shot_statsbomb_xg",
-        "shot_outcome",
-        "shot_technique",
-        "shot_body_part",
         "shot_type",
-        "shot_end_location",
-        "shot_first_time",
-        "shot_aerial_won",
-        "shot_deflected",
-        "shot_key_pass_id",
-        "duration",
     ],
-    "Duel": ["duel_type", "duel_outcome", "duration"],
-    "Dribble": ["dribble_outcome", "dribble_nutmeg", "dribble_no_touch", "duration"],
-    "Carry": ["carry_end_location", "duration"],
-    "Pressure": ["duration"],
-    "Interception": ["interception_outcome", "duration"],
-    "Clearance": [
-        "clearance_body_part",
-        "clearance_aerial_won",
-        "clearance_head",
-        "clearance_left_foot",
-        "clearance_right_foot",
-        "duration",
-    ],
-    "Ball Receipt*": ["ball_receipt_outcome"],
-    "Goal Keeper": [
-        "goalkeeper_type",
-        "goalkeeper_outcome",
-        "goalkeeper_technique",
-        "goalkeeper_body_part",
-        "goalkeeper_position",
-        "goalkeeper_end_location",
-        "duration",
-    ],
-    "Foul Committed": [
-        "foul_committed_type",
-        "foul_committed_card",
-        "foul_committed_advantage",
-        "duration",
-    ],
-    "Foul Won": ["foul_won_advantage", "foul_won_defensive", "duration"],
-    "Miscontrol": ["miscontrol_aerial_won", "duration"],
-    "Block": ["block_deflection", "duration"],
+    "Duel": ["duel_type"],
+    "Dribble": [],
+    "Carry": ["carry_end_location"],
+    "Pressure": [],
+    "Interception": [],
+    "Ball Receipt*": [],
+    "Miscontrol": [],
     # Columnas para calculo de minutos jugados
     "Starting XI": ["tactics"],
     "Substitution": ["substitution_outcome", "substitution_replacement"],
     "Half End": [],
+}
+
+# Columnas que se incluyen en el subset durante el procesamiento (para calcular
+# flags derivados) pero se excluyen del esquema final por enforce_fact_schema().
+COLS_INTERNAS = {
+    "Pass": ["pass_outcome"],
+    "Shot": ["shot_outcome"],
+    "Duel": ["duel_outcome"],
+    "Dribble": ["dribble_outcome"],
+    "Interception": ["interception_outcome"],
+    "Ball Receipt*": ["ball_receipt_outcome"],
 }
 
 NOMBRE_ARCHIVO = {
@@ -233,13 +246,9 @@ NOMBRE_ARCHIVO = {
     "Carry": "fact_carry",
     "Pressure": "fact_pressure",
     "Interception": "fact_interception",
-    "Clearance": "fact_clearance",
     "Ball Receipt*": "fact_ball_receipt",
-    "Goal Keeper": "fact_goalkeeper",
-    "Foul Committed": "fact_foul_committed",
-    "Foul Won": "fact_foul_won",
+    "Goal Keeper": None,  # excluido del output Power BI
     "Miscontrol": "fact_miscontrol",
-    "Block": "fact_block",
     # No se routean a CSV incremental; se procesan en build_fact_minutes
     "Starting XI": "_starting_xi_raw",
     "Substitution": "_substitution_raw",
@@ -248,34 +257,11 @@ NOMBRE_ARCHIVO = {
 
 BOOL_FLAG_COLS = {
     "under_pressure",
-    "counterpress",
     "pass_shot_assist",
     "pass_goal_assist",
     "pass_cross",
     "pass_switch",
     "pass_through_ball",
-    "pass_aerial_won",
-    "pass_miscommunication",
-    "pass_deflected",
-    "pass_inswinging",
-    "pass_outswinging",
-    "pass_straight",
-    "pass_cut_back",
-    "pass_no_touch",
-    "shot_first_time",
-    "shot_aerial_won",
-    "shot_deflected",
-    "dribble_nutmeg",
-    "dribble_no_touch",
-    "clearance_aerial_won",
-    "clearance_head",
-    "clearance_left_foot",
-    "clearance_right_foot",
-    "foul_committed_advantage",
-    "foul_won_advantage",
-    "foul_won_defensive",
-    "miscontrol_aerial_won",
-    "block_deflection",
 }
 
 DERIVED_FLAG_COLS = {
@@ -302,38 +288,8 @@ DERIVED_COLS_EVENTO = {
 SPLIT_LOCATION_COLS = {
     "location": ["location_x", "location_y"],
     "pass_end_location": ["pass_end_x", "pass_end_y"],
-    "shot_end_location": ["shot_end_x", "shot_end_y"],
     "carry_end_location": ["carry_end_x", "carry_end_y"],
-    "goalkeeper_end_location": ["gk_end_x", "gk_end_y"],
 }
-
-COLORES = {
-    "delantero": {
-        "primario": "#E63946",
-        "secundario": "#FF6B6B",
-        "fondo": "#FFF5F5",
-        "acento": "#C1121F",
-    },
-    "mediocampista": {
-        "primario": "#2196F3",
-        "secundario": "#64B5F6",
-        "fondo": "#F0F8FF",
-        "acento": "#0D47A1",
-    },
-    "defensor": {
-        "primario": "#2E7D32",
-        "secundario": "#66BB6A",
-        "fondo": "#F1F8F1",
-        "acento": "#1B5E20",
-    },
-    "lateral": {
-        "primario": "#7B2D8B",
-        "secundario": "#CE93D8",
-        "fondo": "#F9F0FF",
-        "acento": "#4A148C",
-    },
-}
-
 
 def load_json(path: Path):
     with open(path, encoding="utf-8") as f:
@@ -578,7 +534,7 @@ def flatten_event(ev: dict, match_id: int, comp_id: int, seas_id: int, tipo: str
 
 
 def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
-    extra = COLS_EVENTO.get(tipo, [])
+    extra = COLS_EVENTO.get(tipo, []) + COLS_INTERNAS.get(tipo, [])
     cols = safe_cols(subset, CONTEXTO + extra)
     subset = subset[cols].copy()
 
@@ -608,7 +564,6 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
             subset["es_gol"] = 0
             subset["es_al_arco"] = 0
         subset = split_location(subset, "location", "location")
-        subset = split_location(subset, "shot_end_location", "shot_end")
 
     elif tipo == "Carry":
         subset = split_location(subset, "location", "location")
@@ -620,10 +575,6 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
                 (subset["carry_end_x"] - subset["location_x"]) ** 2
                 + (subset["carry_end_y"] - subset["location_y"]) ** 2
             ).pow(0.5).round(2)
-
-    elif tipo == "Goal Keeper":
-        subset = split_location(subset, "location", "location")
-        subset = split_location(subset, "goalkeeper_end_location", "gk_end")
 
     else:
         subset = split_location(subset, "location", "location")
@@ -660,20 +611,55 @@ def build_fact_subset(subset: pd.DataFrame, tipo: str) -> pd.DataFrame:
     return enforce_fact_schema(subset, tipo)
 
 
-def cargar_transfermarkt(tm_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def cargar_liga_player_ids(tm_path: Path) -> set[int]:
+    """
+    Universo de tm_player_id que jugaron en La Liga (competition_id "ES1")
+    entre FECHAS_INICIO y FECHAS_FIN, segun appearances.csv.
+
+    Se usa solo como blocking de alta confianza para el matching: StatsBomb
+    y Transfermarkt cubren las mismas ligas/temporadas, asi que un candidato
+    presente en este universo es mucho mas probable que sea el jugador correcto.
+    No se exporta a Power BI.
+    """
+    appearances_path = tm_path / "appearances.csv"
+    if not appearances_path.exists():
+        print("   Aviso: appearances.csv no encontrado; matching sin blocking de liga/temporada.")
+        return set()
+
+    try:
+        apps = pd.read_csv(
+            appearances_path,
+            usecols=["player_id", "competition_id", "date"],
+            low_memory=False,
+        )
+    except ValueError:
+        print("   Aviso: appearances.csv sin las columnas esperadas; matching sin blocking de liga/temporada.")
+        return set()
+
+    apps["date"] = pd.to_datetime(apps["date"], errors="coerce")
+    apps = apps[
+        (apps["competition_id"] == "ES1")
+        & (apps["date"] >= FECHAS_INICIO)
+        & (apps["date"] <= FECHAS_FIN)
+    ]
+    liga_player_ids = set(pd.to_numeric(apps["player_id"], errors="coerce").dropna().astype(int))
+    print(f"   Universo La Liga ({FECHAS_INICIO} a {FECHAS_FIN}, appearances ES1): {len(liga_player_ids):,} jugadores TM")
+    return liga_player_ids
+
+
+def cargar_transfermarkt(tm_path: Path) -> tuple[pd.DataFrame, set[int], pd.DataFrame]:
     tm_players = pd.read_csv(tm_path / "players.csv", low_memory=False)
     base_cols = [
         "player_id",
         "name",
         "date_of_birth",
         "country_of_citizenship",
-        "country_of_birth",
+        "country_of_birth",  # solo para fallback si citizenship es nulo
         "sub_position",
-        "position",
+        "position",  # solo para fallback si sub_position es nulo
         "foot",
         "height_in_cm",
         "market_value_in_eur",
-        "highest_market_value_in_eur",
     ]
     tm_players = require_columns(tm_players, base_cols)
     tm_players = tm_players[base_cols].rename(columns={"player_id": "tm_player_id", "name": "tm_name"})
@@ -682,20 +668,24 @@ def cargar_transfermarkt(tm_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.
     if "sub_position" not in tm_players.columns or tm_players["sub_position"].isna().all():
         tm_players["sub_position"] = tm_players["position"]
 
-    for col in ["height_in_cm", "market_value_in_eur", "highest_market_value_in_eur"]:
+    for col in ["height_in_cm", "market_value_in_eur"]:
         tm_players[col] = pd.to_numeric(tm_players[col], errors="coerce")
     tm_players["tm_player_id"] = pd.to_numeric(tm_players["tm_player_id"], errors="coerce").astype(
         "Int64"
     )
     tm_players["nombre_norm"] = tm_players["tm_name"].apply(normalizar)
 
+    liga_player_ids = cargar_liga_player_ids(tm_path)
+
     tm_players_match = (
-        tm_players.sort_values(
-            ["nombre_norm", "market_value_in_eur", "highest_market_value_in_eur"],
+        tm_players.assign(en_liga=tm_players["tm_player_id"].isin(liga_player_ids))
+        .sort_values(
+            ["nombre_norm", "en_liga", "market_value_in_eur"],
             ascending=[True, False, False],
             na_position="last",
         )
         .drop_duplicates("nombre_norm", keep="first")
+        .drop(columns=["en_liga"])
         .copy()
     )
     tm_players_match = tm_players_match[tm_players_match["nombre_norm"] != ""].copy()
@@ -711,11 +701,13 @@ def cargar_transfermarkt(tm_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.
     tm_valuations["market_value_in_eur"] = pd.to_numeric(
         tm_valuations["market_value_in_eur"], errors="coerce"
     )
-    return tm_players, tm_players_match, tm_valuations
+    return tm_players_match, liga_player_ids, tm_valuations
 
 
 def procesar_partidos(repo_path: Path, output_dir: Path) -> tuple[list[dict], list[dict], int]:
     for nombre in NOMBRE_ARCHIVO.values():
+        if nombre is None:
+            continue
         path = output_dir / f"{nombre}.csv"
         if path.exists():
             path.unlink()
@@ -775,6 +767,7 @@ def procesar_partidos(repo_path: Path, output_dir: Path) -> tuple[list[dict], li
                                 "team": team_lineup["team_name"],
                                 "player_id": player["player_id"],
                                 "player": player["player_name"],
+                                "player_nickname": player.get("player_nickname"),
                                 "jersey_number": player.get("jersey_number"),
                                 "country": player.get("country", {}).get("name")
                                 if player.get("country")
@@ -804,6 +797,8 @@ def procesar_partidos(repo_path: Path, output_dir: Path) -> tuple[list[dict], li
             TIPOS_TIEMPO = {"Starting XI", "Substitution", "Half End"}
 
             for tipo, nombre_csv in NOMBRE_ARCHIVO.items():
+                if nombre_csv is None:
+                    continue
                 subset = df_match[df_match["type"] == tipo].copy()
                 if subset.empty:
                     continue
@@ -823,8 +818,106 @@ def procesar_partidos(repo_path: Path, output_dir: Path) -> tuple[list[dict], li
     return all_matches, all_lineups, conteo_total
 
 
+GRUPOS_POSICION = {
+    "delantero": {
+        "Center Forward", "Left Wing", "Right Wing",
+        "Secondary Striker", "Left Center Forward",
+        "Right Center Forward",
+    },
+    "mediocampista": {
+        "Center Midfield", "Center Attacking Midfield",
+        "Center Defensive Midfield", "Left Midfield",
+        "Right Midfield", "Left Center Midfield",
+        "Right Center Midfield", "Left Defensive Midfield",
+        "Right Defensive Midfield",
+    },
+    "defensor": {"Center Back", "Left Center Back", "Right Center Back"},
+    "lateral": {
+        "Left Back", "Right Back", "Left Wing Back",
+        "Right Wing Back",
+    },
+    "portero": {"Goalkeeper"},
+}
+
+TM_A_GRUPO = {
+    "Centre-Forward": "delantero", "Left Winger": "delantero",
+    "Right Winger": "delantero", "Second Striker": "delantero",
+    "Central Midfield": "mediocampista",
+    "Attacking Midfield": "mediocampista",
+    "Defensive Midfield": "mediocampista",
+    "Left Midfield": "mediocampista", "Right Midfield": "mediocampista",
+    "Centre-Back": "defensor",
+    "Left-Back": "lateral", "Right-Back": "lateral",
+    "Goalkeeper": "portero",
+}
+
+
+def _posicion_similar(pos_sb: str, sub_pos_tm: str) -> float:
+    if not pos_sb or not sub_pos_tm:
+        return 0.0
+    grupo_sb = next(
+        (g for g, s in GRUPOS_POSICION.items() if pos_sb in s), None
+    )
+    grupo_tm = TM_A_GRUPO.get(sub_pos_tm)
+    return 1.0 if grupo_sb and grupo_sb == grupo_tm else 0.0
+
+
+def compute_posicion_habitual(output_dir: Path) -> pd.DataFrame:
+    """
+    posicion_habitual (StatsBomb position name) por player_id, derivada de
+    fact_pass.csv. Se calcula antes del matching para que _posicion_similar()
+    pueda usarla como senal real (antes siempre era "" porque sb_players no
+    tenia esta columna), y se reutiliza en build_dimensiones().
+    """
+    fact_pass = read_csv_safe(
+        output_dir / "fact_pass.csv",
+        usecols=["player_id", "position"],
+        nrows=500000,
+        on_bad_lines="skip",
+    )
+    if fact_pass.empty or not {"player_id", "position"}.issubset(fact_pass.columns):
+        return pd.DataFrame(columns=["player_id", "posicion_habitual"])
+    return (
+        fact_pass.groupby("player_id")["position"]
+        .agg(lambda x: modo_segura(x, "Desconocida"))
+        .reset_index()
+        .rename(columns={"position": "posicion_habitual"})
+    )
+
+
+# Umbrales del score compuesto (0.60*nombre + 0.25*pais + 0.15*posicion) por tier
+# de candidatos. El tier "liga" (jugadores que constan en appearances.csv de
+# La Liga durante FECHAS_INICIO-FECHAS_FIN) es de alta confianza porque
+# StatsBomb y Transfermarkt cubren exactamente la misma liga y temporadas:
+# basta con un score moderado para aceptar el match. El tier global (sin
+# blocking) es el mas arriesgado y exige un score mayor.
+UMBRAL_LIGA = 0.65
+UMBRAL_PAIS = 0.75
+UMBRAL_GLOBAL = 0.85
+
+MERGE_FINAL_COLS = [
+    "player_id",
+    "player",
+    "country",
+    "nombre_norm",
+    "tm_player_id",
+    "tm_name",
+    "date_of_birth",
+    "country_of_citizenship",
+    "sub_position",
+    "foot",
+    "height_in_cm",
+    "market_value_in_eur",
+    "fuzzy_score",
+    "metodo_match",
+]
+
+
 def matching_jugadores(
-    all_lineups: list[dict], tm_players_match: pd.DataFrame
+    all_lineups: list[dict],
+    tm_players_match: pd.DataFrame,
+    liga_player_ids: set[int],
+    pos_habitual: pd.DataFrame,
 ) -> pd.DataFrame:
     try:
         from rapidfuzz import fuzz
@@ -834,31 +927,24 @@ def matching_jugadores(
 
     lineups_df = pd.DataFrame(all_lineups)
     if lineups_df.empty:
-        return pd.DataFrame(
-            columns=[
-                "player_id",
-                "player",
-                "country",
-                "nombre_norm",
-                "tm_player_id",
-                "tm_name",
-                "date_of_birth",
-                "country_of_citizenship",
-                "sub_position",
-                "foot",
-                "height_in_cm",
-                "market_value_in_eur",
-                "highest_market_value_in_eur",
-                "fuzzy_score",
-            ]
-        )
+        return pd.DataFrame(columns=MERGE_FINAL_COLS)
+
+    if "player_nickname" not in lineups_df.columns:
+        lineups_df["player_nickname"] = pd.NA
 
     sb_players = (
         lineups_df.groupby("player_id")
-        .agg(player=("player", "first"), country=("country", "first"))
+        .agg(
+            player=("player", "first"),
+            country=("country", "first"),
+            player_nickname=("player_nickname", "first"),
+        )
         .reset_index()
     )
     sb_players["nombre_norm"] = sb_players["player"].apply(normalizar)
+    sb_players["nickname_norm"] = sb_players["player_nickname"].apply(normalizar)
+    sb_players = sb_players.merge(pos_habitual, on="player_id", how="left")
+    sb_players["posicion_habitual"] = sb_players["posicion_habitual"].fillna("Desconocida")
 
     tm_cols = [
         "tm_player_id",
@@ -870,99 +956,121 @@ def matching_jugadores(
         "foot",
         "height_in_cm",
         "market_value_in_eur",
-        "highest_market_value_in_eur",
     ]
     merge_exacto = sb_players.merge(tm_players_match[tm_cols], on="nombre_norm", how="left")
     merge_exacto["fuzzy_score"] = np.where(merge_exacto["tm_player_id"].notna(), 100, np.nan)
+    merge_exacto["metodo_match"] = np.where(
+        merge_exacto["tm_player_id"].notna(), "exacto_nombre", pd.NA
+    )
 
     con_match = merge_exacto[merge_exacto["tm_player_id"].notna()].copy()
     sin_match = merge_exacto[merge_exacto["tm_player_id"].isna()][
-        ["player_id", "player", "nombre_norm", "country"]
+        ["player_id", "player", "nombre_norm", "country", "nickname_norm", "posicion_habitual"]
     ].copy()
-    print(f"   Match exacto: {len(con_match):>4} jugadores")
-    print(f"   Sin match:    {len(sin_match):>4} jugadores - aplicando fuzzy")
+    print(f"   Match exacto (nombre): {len(con_match):>4} jugadores")
+    print(f"   Sin match:             {len(sin_match):>4} jugadores - aplicando apodo/fuzzy")
 
-    tm_nombres = tm_players_match["nombre_norm"].tolist()
+    tm_players_match = tm_players_match.copy()
+    tm_players_match["pais_norm"] = tm_players_match["country_of_citizenship"].apply(
+        lambda x: normalizar(str(x)) if pd.notna(x) else ""
+    )
+    tm_por_pais = {
+        pais: grupo
+        for pais, grupo in tm_players_match.groupby("pais_norm")
+        if pais != ""
+    }
+    liga_pool = tm_players_match[tm_players_match["tm_player_id"].isin(liga_player_ids)]
     tm_data = tm_players_match.set_index("nombre_norm")
+
+    def mejor_en_pool(pool: pd.DataFrame, nombres_sb: list[str], pais_sb: str, pos_sb: str) -> tuple[float, str | None]:
+        if pool.empty:
+            return 0.0, None
+        mejor_score = 0.0
+        mejor_nombre = None
+        for _, tm_row in pool.iterrows():
+            tm_norm = tm_row["nombre_norm"]
+            s_nombre = max(
+                (fuzz.token_set_ratio(nom, tm_norm) / 100 for nom in nombres_sb), default=0.0
+            )
+            s_pais = 1.0 if pais_sb and tm_row["pais_norm"] == pais_sb else 0.0
+            s_posicion = _posicion_similar(pos_sb, str(tm_row.get("sub_position", "") or ""))
+            score_total = 0.60 * s_nombre + 0.25 * s_pais + 0.15 * s_posicion
+            if score_total > mejor_score:
+                mejor_score = score_total
+                mejor_nombre = tm_norm
+        return mejor_score, mejor_nombre
+
     fuzzy_rows = []
     no_match_rows = []
 
     for _, row in sin_match.iterrows():
         nombre_sb = row["nombre_norm"]
-        mejor_score = 0
-        mejor_nombre = None
-        if nombre_sb:
-            for tm_nombre in tm_nombres:
-                score = fuzz.token_set_ratio(nombre_sb, tm_nombre)
-                if score > mejor_score:
-                    mejor_score = score
-                    mejor_nombre = tm_nombre
+        nick_sb = row["nickname_norm"]
+        pais_sb = normalizar(str(row.get("country", "") or ""))
+        pos_sb = str(row.get("posicion_habitual", "") or "")
+        nombres_sb = [n for n in {nombre_sb, nick_sb} if n]
 
-        if mejor_score >= FUZZY_UMBRAL and mejor_nombre:
-            tm_row = tm_data.loc[mejor_nombre]
-            fuzzy_rows.append(
-                {
-                    "player_id": row["player_id"],
-                    "player": row["player"],
-                    "country": row["country"],
-                    "nombre_norm": row["nombre_norm"],
-                    "tm_player_id": tm_row["tm_player_id"],
-                    "tm_name": tm_row["tm_name"],
-                    "date_of_birth": tm_row["date_of_birth"],
-                    "country_of_citizenship": tm_row["country_of_citizenship"],
-                    "sub_position": tm_row["sub_position"],
-                    "foot": tm_row["foot"],
-                    "height_in_cm": tm_row["height_in_cm"],
-                    "market_value_in_eur": tm_row["market_value_in_eur"],
-                    "highest_market_value_in_eur": tm_row["highest_market_value_in_eur"],
-                    "fuzzy_score": mejor_score,
-                }
+        if not nombres_sb:
+            no_match_rows.append(_fila_sin_match(row))
+            continue
+
+        # 0. Match exacto por apodo (ej. "Leo Messi" -> tm_name "Lionel Messi"
+        # solo coincide via nickname "Messi" no, pero "Coutinho", "Pirlo", etc si).
+        # Se exige largo minimo para evitar falsos positivos con apodos cortos.
+        if nick_sb and len(nick_sb) >= 6 and nick_sb in tm_data.index and nick_sb != nombre_sb:
+            tm_row = tm_data.loc[nick_sb]
+            if isinstance(tm_row, pd.DataFrame):
+                tm_row = tm_row.iloc[0]
+            fuzzy_rows.append(_fila_match(row, tm_row, 100.0, "exacto_apodo"))
+            continue
+
+        # 1. Tier liga: jugadores presentes en La Liga durante las mismas
+        # temporadas segun Transfermarkt. Blocking de muy alta confianza.
+        liga_pool_pais = (
+            liga_pool[liga_pool["pais_norm"] == pais_sb] if pais_sb and not liga_pool.empty else pd.DataFrame()
+        )
+        score, nombre = mejor_en_pool(
+            liga_pool_pais if not liga_pool_pais.empty else liga_pool, nombres_sb, pais_sb, pos_sb
+        )
+        if score >= UMBRAL_LIGA and nombre:
+            fuzzy_rows.append(_fila_match(row, tm_data.loc[nombre], score * 100, "fuzzy_liga"))
+            continue
+
+        # 2. Tier pais: candidatos del mismo pais con nombre fuzzy >= 60
+        candidatos_pais = tm_por_pais.get(pais_sb, pd.DataFrame())
+        if not candidatos_pais.empty:
+            mask = candidatos_pais["nombre_norm"].apply(
+                lambda n: any(fuzz.token_set_ratio(nom, n) >= 60 for nom in nombres_sb)
             )
+            candidatos = candidatos_pais[mask]
         else:
-            no_match_rows.append(
-                {
-                    "player_id": row["player_id"],
-                    "player": row["player"],
-                    "country": row["country"],
-                    "nombre_norm": row["nombre_norm"],
-                    "tm_player_id": pd.NA,
-                    "tm_name": pd.NA,
-                    "date_of_birth": pd.NA,
-                    "country_of_citizenship": pd.NA,
-                    "sub_position": pd.NA,
-                    "foot": pd.NA,
-                    "height_in_cm": np.nan,
-                    "market_value_in_eur": np.nan,
-                    "highest_market_value_in_eur": np.nan,
-                    "fuzzy_score": np.nan,
-                }
-            )
+            candidatos = pd.DataFrame()
+
+        score, nombre = mejor_en_pool(candidatos, nombres_sb, pais_sb, pos_sb)
+        if score >= UMBRAL_PAIS and nombre:
+            fuzzy_rows.append(_fila_match(row, tm_data.loc[nombre], score * 100, "fuzzy_pais"))
+            continue
+
+        # 3. Tier global: sin blocking, umbral mas exigente
+        score, nombre = mejor_en_pool(tm_players_match, nombres_sb, pais_sb, pos_sb)
+        if score >= UMBRAL_GLOBAL and nombre:
+            fuzzy_rows.append(_fila_match(row, tm_data.loc[nombre], score * 100, "fuzzy_global"))
+        else:
+            no_match_rows.append(_fila_sin_match(row))
 
     merge_fuzzy = pd.DataFrame(fuzzy_rows)
     merge_sin_match = pd.DataFrame(no_match_rows)
-    print(f"   Match fuzzy:  {len(merge_fuzzy):>4} jugadores adicionales")
-
-    cols_merge = [
-        "player_id",
-        "player",
-        "country",
-        "nombre_norm",
-        "tm_player_id",
-        "tm_name",
-        "date_of_birth",
-        "country_of_citizenship",
-        "sub_position",
-        "foot",
-        "height_in_cm",
-        "market_value_in_eur",
-        "highest_market_value_in_eur",
-        "fuzzy_score",
-    ]
-    partes = [con_match[cols_merge]]
     if not merge_fuzzy.empty:
-        partes.append(merge_fuzzy[cols_merge])
+        for metodo in ["exacto_apodo", "fuzzy_liga", "fuzzy_pais", "fuzzy_global"]:
+            n = (merge_fuzzy["metodo_match"] == metodo).sum()
+            if n:
+                print(f"   {metodo:<14}: {n:>4} jugadores adicionales")
+
+    partes = [con_match[MERGE_FINAL_COLS]]
+    if not merge_fuzzy.empty:
+        partes.append(merge_fuzzy[MERGE_FINAL_COLS])
     if not merge_sin_match.empty:
-        partes.append(merge_sin_match[cols_merge])
+        partes.append(merge_sin_match[MERGE_FINAL_COLS])
 
     merge_final = pd.concat(partes, ignore_index=True)
     merge_final["fuzzy_score"] = pd.to_numeric(merge_final["fuzzy_score"], errors="coerce")
@@ -971,11 +1079,56 @@ def matching_jugadores(
     return merge_final
 
 
+def _fila_match(row: pd.Series, tm_row: pd.Series, score: float, metodo: str) -> dict:
+    return {
+        "player_id": row["player_id"],
+        "player": row["player"],
+        "country": row["country"],
+        "nombre_norm": row["nombre_norm"],
+        "tm_player_id": tm_row["tm_player_id"],
+        "tm_name": tm_row["tm_name"],
+        "date_of_birth": tm_row["date_of_birth"],
+        "country_of_citizenship": tm_row["country_of_citizenship"],
+        "sub_position": tm_row["sub_position"],
+        "foot": tm_row["foot"],
+        "height_in_cm": tm_row["height_in_cm"],
+        "market_value_in_eur": tm_row["market_value_in_eur"],
+        "fuzzy_score": round(score, 1),
+        "metodo_match": metodo,
+    }
+
+
+def _fila_sin_match(row: pd.Series) -> dict:
+    return {
+        "player_id": row["player_id"],
+        "player": row["player"],
+        "country": row["country"],
+        "nombre_norm": row["nombre_norm"],
+        "tm_player_id": pd.NA,
+        "tm_name": pd.NA,
+        "date_of_birth": pd.NA,
+        "country_of_citizenship": pd.NA,
+        "sub_position": pd.NA,
+        "foot": pd.NA,
+        "height_in_cm": np.nan,
+        "market_value_in_eur": np.nan,
+        "fuzzy_score": np.nan,
+        "metodo_match": pd.NA,
+    }
+
+
 def build_dim_valoracion_historica(
     dim_jugador: pd.DataFrame,
-    tm_players: pd.DataFrame,
     tm_valuations: pd.DataFrame,
 ) -> pd.DataFrame:
+    """
+    Construye dim_valoracion a partir del tm_player_id que matching_jugadores()
+    ya resolvio para cada jugador StatsBomb (dim_jugador["tm_player_id"]).
+
+    No se hace un segundo matching por nombre: usar el mismo tm_player_id en
+    toda la tabla evita que dim_jugador y dim_valoracion terminen apuntando a
+    personas distintas de Transfermarkt para el mismo player_id.
+    """
     val_cols = [
         "player_id",
         "tm_player_id",
@@ -984,24 +1137,8 @@ def build_dim_valoracion_historica(
         "current_club_name",
         "player_club_domestic_competition_id",
     ]
-    if dim_jugador.empty or tm_players.empty or tm_valuations.empty:
+    if dim_jugador.empty or tm_valuations.empty:
         return pd.DataFrame(columns=val_cols)
-
-    try:
-        from rapidfuzz import fuzz
-        token_set_ratio = fuzz.token_set_ratio
-    except ImportError:
-        from difflib import SequenceMatcher
-
-        def token_set_ratio(a: str, b: str) -> float:
-            a_tokens = set(a.split())
-            b_tokens = set(b.split())
-            common = " ".join(sorted(a_tokens & b_tokens))
-            a_diff = " ".join(sorted(a_tokens - b_tokens))
-            b_diff = " ".join(sorted(b_tokens - a_tokens))
-            left = " ".join(part for part in [common, a_diff] if part)
-            right = " ".join(part for part in [common, b_diff] if part)
-            return SequenceMatcher(None, left, right).ratio() * 100
 
     vals = tm_valuations.copy()
     vals["date"] = pd.to_datetime(vals["date"], errors="coerce")
@@ -1021,87 +1158,39 @@ def build_dim_valoracion_historica(
     )
     val_peak = vals.drop_duplicates("tm_player_id", keep="first")
 
-    players = tm_players.copy()
-    players["tm_player_id"] = pd.to_numeric(players["tm_player_id"], errors="coerce").astype("Int64")
-    players["nombre_norm"] = players["tm_name"].apply(normalizar)
-    tm_hist = (
-        players[["tm_player_id", "tm_name", "nombre_norm"]]
-        .dropna(subset=["tm_player_id"])
-        .merge(val_peak, on="tm_player_id", how="inner")
-    )
-    tm_hist = tm_hist[tm_hist["nombre_norm"] != ""].drop_duplicates("tm_player_id")
-    if tm_hist.empty:
-        return pd.DataFrame(columns=val_cols)
+    base = dim_jugador[["player_id", "tm_player_id"]].dropna(subset=["tm_player_id"]).drop_duplicates("player_id")
+    base = base.copy()
+    base["tm_player_id"] = pd.to_numeric(base["tm_player_id"], errors="coerce").astype("Int64")
 
-    tm_names = tm_hist["nombre_norm"].tolist()
-    tm_by_name = tm_hist.sort_values("market_value_in_eur", ascending=False).drop_duplicates(
-        "nombre_norm", keep="first"
-    ).set_index("nombre_norm")
-
-    rows = []
-    diagnostics = {}
-    check_players = ["Gerard Pique", "Ivan Rakitic", "Jordi Alba"]
-
-    for _, sb in dim_jugador[["player_id", "player"]].drop_duplicates("player_id").iterrows():
-        sb_norm = normalizar(sb["player"])
-        best_score = 0
-        best_name = None
-        if sb_norm:
-            for tm_name in tm_names:
-                score = token_set_ratio(sb_norm, tm_name)
-                if score > best_score:
-                    best_score = score
-                    best_name = tm_name
-
-        row = {col: pd.NA for col in val_cols}
-        row["player_id"] = sb["player_id"]
-        if best_score >= 88 and best_name:
-            tm_row = tm_by_name.loc[best_name]
-            row["tm_player_id"] = tm_row["tm_player_id"]
-            row["date"] = tm_row["date"]
-            row["market_value_in_eur"] = tm_row["market_value_in_eur"]
-            row["current_club_name"] = tm_row.get("current_club_name", pd.NA)
-            row["player_club_domestic_competition_id"] = tm_row.get(
-                "player_club_domestic_competition_id", pd.NA
-            )
-
-        for check in check_players:
-            if normalizar(check) == sb_norm:
-                tm_name_out = tm_by_name.loc[best_name]["tm_name"] if best_name in tm_by_name.index else pd.NA
-                diagnostics[check] = {
-                    "score": best_score,
-                    "tm_name": tm_name_out,
-                    "value": row["market_value_in_eur"],
-                }
-        rows.append(row)
-
-    dim_valoracion = pd.DataFrame(rows, columns=val_cols)
-    dim_valoracion["tm_player_id"] = pd.to_numeric(
-        dim_valoracion["tm_player_id"], errors="coerce"
-    ).astype("Int64")
-    dim_valoracion["market_value_in_eur"] = pd.to_numeric(
-        dim_valoracion["market_value_in_eur"], errors="coerce"
-    )
+    dim_valoracion = base.merge(val_peak, on="tm_player_id", how="inner")
+    for col in val_cols:
+        if col not in dim_valoracion.columns:
+            dim_valoracion[col] = pd.NA
+    dim_valoracion = dim_valoracion[val_cols].copy()
     dim_valoracion["date"] = pd.to_datetime(dim_valoracion["date"], errors="coerce")
     dim_valoracion["date"] = dim_valoracion["date"].fillna(pd.Timestamp("2016-01-01"))
     dim_valoracion = dim_valoracion.sort_values(["player_id", "date"]).reset_index(drop=True)
 
+    print(f"   OK dim_valoracion: {len(dim_valoracion):,} jugadores con valoracion historica "
+          f"(via tm_player_id de matching_jugadores)")
+
     print("   Check valoraciones historicas:")
-    for check in check_players:
-        info = diagnostics.get(check)
-        if not info:
+    for check in ["Gerard Pique", "Ivan Rakitic", "Jordi Alba"]:
+        check_norm = normalizar(check)
+        sb_row = dim_jugador[dim_jugador["player"].apply(normalizar) == check_norm]
+        if sb_row.empty:
             print(f"      {check} -> sin jugador StatsBomb encontrado")
             continue
-        value = info["value"]
-        if pd.isna(value):
-            print(f"      {check} -> sin match TM | score={info['score']:.1f}")
-        else:
-            print(
-                f"      {check} -> {value:,.0f} EUR | "
-                f"match={info['tm_name']} | score={info['score']:.1f}"
-            )
-            if value < 5_000_000:
-                print(f"      Aviso: {check} quedo por debajo de 5M; revisar match.")
+        pid = sb_row.iloc[0]["player_id"]
+        val_row = dim_valoracion[dim_valoracion["player_id"] == pid]
+        if val_row.empty:
+            tm_pid = sb_row.iloc[0].get("tm_player_id")
+            print(f"      {check} -> sin valoracion (tm_player_id={tm_pid})")
+            continue
+        value = val_row.iloc[0]["market_value_in_eur"]
+        print(f"      {check} -> {value:,.0f} EUR")
+        if value < 5_000_000:
+            print(f"      Aviso: {check} quedo por debajo de 5M; revisar match.")
 
     return dim_valoracion
 
@@ -1110,7 +1199,6 @@ def build_dimensiones(
     all_matches: list[dict],
     all_lineups: list[dict],
     merge_final: pd.DataFrame,
-    tm_players: pd.DataFrame,
     tm_valuations: pd.DataFrame,
     output_dir: Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -1124,37 +1212,18 @@ def build_dimensiones(
         base_pos = pd.DataFrame(columns=["player_id", "posicion_habitual", "equipo_habitual"])
     else:
         base_pos = (
-            lineups_df.groupby("player_id")
-            .agg(
-                equipo_habitual=("team", lambda x: modo_segura(x, "Desconocido")),
-            )
-            .reset_index()
-        )
-        base_pos["posicion_habitual"] = "Desconocida"
-
-    fact_pass = read_csv_safe(
-        output_dir / "fact_pass.csv",
-        usecols=["player_id", "position", "team"],
-        nrows=500000,
-        on_bad_lines="skip",
-    )
-    if not fact_pass.empty and {"player_id", "position", "team"}.issubset(fact_pass.columns):
-        pos_habitual = (
-            fact_pass.groupby("player_id")["position"]
-            .agg(lambda x: modo_segura(x, "Desconocida"))
-            .reset_index()
-            .rename(columns={"position": "posicion_habitual"})
-        )
-        equipo_habitual = (
-            fact_pass.groupby("player_id")["team"]
+            lineups_df.groupby("player_id")["team"]
             .agg(lambda x: modo_segura(x, "Desconocido"))
             .reset_index()
             .rename(columns={"team": "equipo_habitual"})
         )
+        base_pos["posicion_habitual"] = "Desconocida"
+
+    pos_habitual = compute_posicion_habitual(output_dir)
+    if not pos_habitual.empty:
         base_pos = (
-            base_pos.drop(columns=["posicion_habitual", "equipo_habitual"], errors="ignore")
+            base_pos.drop(columns=["posicion_habitual"], errors="ignore")
             .merge(pos_habitual, on="player_id", how="outer")
-            .merge(equipo_habitual, on="player_id", how="outer")
         )
 
     dim_jugador = (
@@ -1164,14 +1233,14 @@ def build_dimensiones(
         .drop_duplicates(subset="player_id", keep="first")
         .reset_index(drop=True)
     )
-    for col in ["height_in_cm", "market_value_in_eur", "highest_market_value_in_eur"]:
+    for col in ["height_in_cm", "market_value_in_eur"]:
         if col in dim_jugador.columns:
             dim_jugador[col] = pd.to_numeric(dim_jugador[col], errors="coerce")
     dim_jugador["posicion_habitual"] = dim_jugador["posicion_habitual"].fillna("Desconocida")
     dim_jugador["equipo_habitual"] = dim_jugador["equipo_habitual"].fillna("Desconocido")
     save(dim_jugador, "dim_jugador", output_dir)
 
-    dim_valoracion = build_dim_valoracion_historica(dim_jugador, tm_players, tm_valuations)
+    dim_valoracion = build_dim_valoracion_historica(dim_jugador, tm_valuations)
     save(dim_valoracion, "dim_valoracion", output_dir)
 
     return dim_partido, dim_jugador, dim_valoracion
@@ -1381,880 +1450,218 @@ def build_fact_minutes(output_dir: Path) -> pd.DataFrame:
     return df_minutes
 
 
-def setup_plotting():
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        return plt
-    except ImportError:
-        install_if_missing("matplotlib")
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        return plt
+# Columnas clave a chequear por tabla en el reporte de conformidad.
+FACT_COLUMNAS_CLAVE = {
+    "fact_shot": ["player_id", "match_id", "shot_statsbomb_xg", "location_x"],
+    "fact_pass": ["player_id", "match_id", "es_pase_completo", "pass_end_x"],
+    "fact_carry": ["player_id", "match_id", "carry_distancia"],
+    "fact_duel": ["player_id", "match_id", "es_duelo_ganado", "location_x"],
+    "fact_dribble": ["player_id", "match_id", "es_dribble_exitoso", "location_x"],
+    "fact_pressure": ["player_id", "match_id", "location_x"],
+    "fact_interception": ["player_id", "match_id", "es_intercepcion_exitosa"],
+    "fact_ball_receipt": ["player_id", "match_id", "es_recepcion_exitosa"],
+    "fact_minutes": ["player_id", "match_id", "minutos_jugados"],
+    "dim_jugador": ["player_id", "tm_player_id", "sub_position", "market_value_in_eur"],
+}
 
 
-def calcular_iqr(serie: pd.Series) -> dict:
-    serie = pd.to_numeric(serie, errors="coerce").dropna()
-    if len(serie) == 0:
-        return {"Q1": 0, "Q3": 0, "IQR": 0, "lower": 0, "upper": 0, "n_outliers": 0, "pct_outliers": 0}
-    q1 = serie.quantile(0.25)
-    q3 = serie.quantile(0.75)
-    iqr = q3 - q1
-    lower = q1 - 1.5 * iqr
-    upper = q3 + 1.5 * iqr
-    outliers = serie[(serie < lower) | (serie > upper)]
-    return {
-        "Q1": q1,
-        "Q3": q3,
-        "IQR": iqr,
-        "lower": lower,
-        "upper": upper,
-        "n_outliers": len(outliers),
-        "pct_outliers": round(len(outliers) / len(serie) * 100, 2),
-    }
-
-
-def fig_to_b64(fig, plt) -> str:
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight", facecolor=fig.get_facecolor())
-    buf.seek(0)
-    encoded = base64.b64encode(buf.read()).decode("utf-8")
-    plt.close(fig)
-    return encoded
-
-
-def grafico_scatter_valoracion(df, metrica, label_metrica, color, fondo, titulo, plt) -> str:
-    """Compatibilidad legacy: el scatter ahora es interactivo en el HTML."""
-    return ""
-
-
-def preparar_json_scatter(df: pd.DataFrame, cols_metricas: list[str], titulos_metricas: list[str]) -> str:
-    """Genera el JSON embebido para el scatter interactivo.
-    Incluye todas las metricas del perfil para que el selector JS pueda cambiar el eje X."""
-    col_val = "valor_mercado_promedio"
-    registros = []
-    df_work = df.copy()
-    for col in cols_metricas + [col_val]:
-        if col in df_work.columns:
-            df_work[col] = pd.to_numeric(df_work[col], errors="coerce")
-    df_work = df_work[pd.to_numeric(df_work.get(col_val, pd.Series(dtype=float)), errors="coerce") > 0].copy()
-    name_col = "player" if "player" in df_work.columns else (df_work.columns[0] if len(df_work.columns) > 0 else None)
-    for _, row in df_work.iterrows():
-        rec: dict = {"vm": round(float(row[col_val]) / 1e6, 3) if pd.notna(row.get(col_val)) else None}
-        if name_col and pd.notna(row.get(name_col)):
-            rec["n"] = str(row[name_col])
-        for col in cols_metricas:
-            if col in row.index and pd.notna(row[col]):
-                rec[col] = round(float(row[col]), 2)
-        if rec.get("vm") is not None:
-            registros.append(rec)
-    meta = [{"col": c, "label": str(t)} for c, t in zip(cols_metricas, titulos_metricas)]
-    return json.dumps({"data": registros, "metricas": meta}, ensure_ascii=False)
-
-
-def preparar_json_histo_box(df: pd.DataFrame, cols_metricas: list[str], titulos_metricas: list[str]) -> str:
-    """Genera el JSON embebido para histogramas y boxplots interactivos."""
-    registros = []
-    df_work = df.copy()
-    for col in cols_metricas:
-        if col in df_work.columns:
-            df_work[col] = pd.to_numeric(df_work[col], errors="coerce")
-
-    for _, row in df_work.iterrows():
-        rec: dict = {}
-        for col in cols_metricas:
-            if col in row.index and pd.notna(row[col]):
-                rec[col] = round(float(row[col]), 2)
-        if rec:
-            registros.append(rec)
-
-    meta = [{"col": c, "label": str(t)} for c, t in zip(cols_metricas, titulos_metricas)]
-    return json.dumps({"data": registros, "metricas": meta}, ensure_ascii=False)
-
-
-def grafico_boxplot_cuartiles(df, metrica, color, fondo, label_metrica, plt) -> str:
-    if metrica not in df.columns or "valor_mercado_promedio" not in df.columns:
-        return ""
-    df_plot = df[
-        pd.to_numeric(df[metrica], errors="coerce").notna()
-        & pd.to_numeric(df["valor_mercado_promedio"], errors="coerce").notna()
-        & (pd.to_numeric(df["valor_mercado_promedio"], errors="coerce") > 0)
-    ].copy()
-    if len(df_plot) < 20 or df_plot[metrica].nunique(dropna=True) < 4:
-        return ""
-    df_plot[metrica] = pd.to_numeric(df_plot[metrica], errors="coerce")
-    try:
-        df_plot["cuartil"] = pd.qcut(df_plot[metrica], q=4, duplicates="drop")
-    except ValueError:
-        return ""
-    intervalos = list(df_plot["cuartil"].dropna().cat.categories)
-    if len(intervalos) < 2:
-        return ""
-    labels = [f"Q{i + 1}" for i in range(len(intervalos))]
-    grupos = [
-        df_plot[df_plot["cuartil"] == intervalo]["valor_mercado_promedio"].values / 1e6
-        for intervalo in intervalos
-    ]
-
-    fig, ax = plt.subplots(figsize=(8, 4))
-    fig.patch.set_facecolor(fondo)
-    ax.set_facecolor(fondo)
-    bp = ax.boxplot(grupos, patch_artist=True, labels=labels)
-    for box in bp["boxes"]:
-        box.set_facecolor(color)
-        box.set_alpha(0.7)
-    ax.set_xlabel(f"Cuartil de rendimiento - {label_metrica}")
-    ax.set_ylabel("Valor de mercado (M EUR)")
-    ax.set_title("El mercado precia esta metrica?", fontsize=12, fontweight="bold")
-    ax.spines[["top", "right"]].set_visible(False)
-    plt.tight_layout()
-    return fig_to_b64(fig, plt)
-
-
-def grafico_hist_valoracion(serie_valores, color, fondo, plt) -> str:
-    datos = pd.to_numeric(serie_valores, errors="coerce").dropna()
-    datos = datos[datos > 0] / 1e6
-    if len(datos) < 5:
-        return ""
-    fig, ax = plt.subplots(figsize=(7, 4))
-    fig.patch.set_facecolor(fondo)
-    ax.set_facecolor(fondo)
-    ax.hist(datos, bins=min(30, max(5, len(datos) // 2)), color=color, alpha=0.7, edgecolor="white", linewidth=0.5)
-    ax.axvline(datos.mean(), color="#333333", linestyle="--", linewidth=1.5, label=f"Media: {datos.mean():.1f}M EUR")
-    ax.axvline(datos.median(), color="#888888", linestyle=":", linewidth=1.5, label=f"Mediana: {datos.median():.1f}M EUR")
-    ax.set_xlabel("Valor de mercado promedio (M EUR)")
-    ax.set_ylabel("Jugadores")
-    ax.set_title("Distribucion de valor de mercado del perfil", fontsize=12, fontweight="bold")
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(fontsize=9, framealpha=0.7)
-    plt.tight_layout()
-    return fig_to_b64(fig, plt)
-
-
-def tabla_stats_html(df, cols, titulos, color) -> str:
+def _tabla_rangos_html(serie: pd.Series, bins: list[tuple[float, float, str]], color: str) -> str:
+    s = pd.to_numeric(serie, errors="coerce").dropna()
+    total = len(s)
     filas = ""
-    for col, titulo in zip(cols, titulos):
-        if col not in df.columns:
-            continue
-        d = pd.to_numeric(df[col], errors="coerce").dropna()
-        if len(d) < 2:
-            continue
-        skew = d.skew()
-        kurt = d.kurtosis()
-        lbl = "Simetrica" if abs(skew) < 0.5 else ("Asim. +" if skew > 0 else "Asim. -")
-        filas += f"""
-        <tr><td><code>{esc_html(titulo)}</code></td><td>{len(d):,}</td>
-        <td>{d.mean():.2f}</td><td>{d.median():.2f}</td><td>{d.std():.2f}</td>
-        <td>{d.min():.2f}</td><td>{d.max():.2f}</td>
-        <td>{skew:.2f} <em>({lbl})</em></td><td>{kurt:.2f}</td></tr>"""
+    for lo, hi, label in bins:
+        if hi is None:
+            n = (s >= lo).sum()
+        else:
+            n = ((s >= lo) & (s < hi)).sum()
+        pct = (n / total * 100) if total else 0
+        ancho = max(1, round(pct))
+        filas += f"""<tr><td>{esc_html(label)}</td><td>{n:,}</td>
+        <td>{pct:.1f}%</td>
+        <td><div class="bar" style="width:{ancho}%;background:{color}"></div></td></tr>"""
     return f"""<table class="tbl"><thead><tr style="background:{color};color:white">
-    <th>Variable</th><th>N</th><th>Media</th><th>Mediana</th><th>Desv.Est.</th>
-    <th>Min.</th><th>Max.</th><th>Asimetria</th><th>Curtosis</th>
+    <th>Rango</th><th>N</th><th>%</th><th></th>
     </tr></thead><tbody>{filas}</tbody></table>"""
 
 
-def tabla_iqr_html(df, cols, titulos, color) -> str:
-    filas = ""
-    for col, titulo in zip(cols, titulos):
-        if col not in df.columns:
-            continue
-        r = calcular_iqr(df[col])
-        sem = "rojo" if r["pct_outliers"] > 10 else ("amarillo" if r["pct_outliers"] > 5 else "verde")
-        filas += f"""
-        <tr><td><code>{esc_html(titulo)}</code></td><td>{r['Q1']:.2f}</td><td>{r['Q3']:.2f}</td>
-        <td>{r['IQR']:.2f}</td><td>{r['lower']:.2f}</td><td>{r['upper']:.2f}</td>
-        <td><strong>{r['n_outliers']:,}</strong></td><td>{r['pct_outliers']}% ({sem})</td></tr>"""
-    return f"""<table class="tbl"><thead><tr style="background:{color};color:white">
-    <th>Variable</th><th>Q1</th><th>Q3</th><th>IQR</th><th>Limite inf.</th>
-    <th>Limite sup.</th><th>N outliers</th><th>% outliers</th>
-    </tr></thead><tbody>{filas}</tbody></table>"""
+def generar_reporte_conformidad(
+    output_dir: Path,
+    dim_jugador: pd.DataFrame,
+    conteo_total: int,
+    temporadas: list[str],
+    t_inicio: float,
+) -> None:
+    color = "#2196F3"
+    tiempo_total = time.time() - t_inicio
+    fecha_ejecucion = time.strftime("%Y-%m-%d %H:%M:%S")
+    alertas: list[tuple[str, str]] = []
 
-
-def tabla_universo_html(df, color) -> str:
-    n_jug = len(df)
-    n_convm = (pd.to_numeric(df.get("valor_mercado_promedio", pd.Series(dtype=float)), errors="coerce") > 0).sum()
-    valores = pd.to_numeric(df.get("valor_mercado_promedio", pd.Series(dtype=float)), errors="coerce")
-    med_val = valores[valores > 0].median()
-    pct_convm = (n_convm / n_jug * 100) if n_jug else 0
-    med_val_txt = f"{med_val / 1e6:.1f} M EUR" if pd.notna(med_val) else "Sin datos"
-    equipos = df.get("equipo_habitual", pd.Series(dtype=str)).value_counts().head(5)
-    rows_eq = "".join(f"<tr><td>{esc_html(eq)}</td><td>{cnt}</td></tr>" for eq, cnt in equipos.items())
-    return f"""
+    # --- Seccion 1: resumen de ejecucion ---
+    dim_partido = read_csv_safe(output_dir / "dim_partido.csv")
+    partidos_totales = len(dim_partido)
+    temporadas_li = "".join(f"<li>{esc_html(t)}</li>" for t in temporadas)
+    seccion1 = f"""
     <div class="two-cols">
       <table class="tbl"><thead><tr style="background:{color};color:white"><th>Metrica</th><th>Valor</th></tr></thead>
-        <tbody><tr><td>Jugadores unicos</td><td><strong>{n_jug:,}</strong></td></tr>
-        <tr><td>Con valor de mercado</td><td>{n_convm:,} ({pct_convm:.0f}%)</td></tr>
-        <tr><td>Valor mediano del periodo</td><td>{med_val_txt}</td></tr></tbody></table>
-      <table class="tbl"><thead><tr style="background:{color};color:white"><th>Equipo</th><th>Jugadores</th></tr></thead>
-        <tbody>{rows_eq}</tbody></table>
+        <tbody>
+          <tr><td>Partidos totales</td><td>{partidos_totales:,}</td></tr>
+          <tr><td>Eventos totales</td><td>{conteo_total:,}</td></tr>
+          <tr><td>Fecha y hora de ejecucion</td><td>{fecha_ejecucion}</td></tr>
+          <tr><td>Tiempo total</td><td>{tiempo_total:.1f} s</td></tr>
+        </tbody></table>
+      <div><strong>Temporadas procesadas</strong><ul>{temporadas_li}</ul></div>
     </div>"""
 
+    # --- Seccion 2: cobertura del matching StatsBomb-Transfermarkt ---
+    total_jug = len(dim_jugador)
+    fuzzy_score = pd.to_numeric(dim_jugador.get("fuzzy_score", pd.Series(dtype=float)), errors="coerce")
+    tiene_tm = dim_jugador.get("tm_player_id", pd.Series(dtype="object")).notna()
+    n_exacto = int(((fuzzy_score == 100) & tiene_tm).sum())
+    n_sin_match = int((~tiene_tm).sum())
+    n_fuzzy = int(total_jug - n_exacto - n_sin_match)
+    pct_sin_match = (n_sin_match / total_jug * 100) if total_jug else 0
 
-def generar_html_perfil(
-    perfil,
-    subtitulo,
-    filosofia,
-    df_analitico,
-    cols_metricas,
-    titulos_metricas,
-    imgs_hist,
-    img_box,
-    img_hist_val,
-    img_scatter,        # compatibilidad legacy, se usa json_scatter
-    img_cuartiles,
-    t_stats,
-    t_iqr,
-    t_universo,
-    colores,
-    hallazgos,
-    json_scatter="{}",
-    json_histo_box="{}",
-) -> str:
-    c = colores
-    hist_val_block = (
-        f"""<div class="chart-card"><h3>Distribucion de valor de mercado</h3><img src="data:image/png;base64,{img_hist_val}"/></div>"""
-        if img_hist_val
-        else ""
-    )
-    cuartiles_block = (
-        f"""<div class="chart-card"><h3>Valor por cuartiles de rendimiento</h3><img src="data:image/png;base64,{img_cuartiles}"/></div>"""
-        if img_cuartiles
-        else ""
-    )
-    hallazgos_li = "".join(f"<li>{esc_html(h)}</li>" for h in hallazgos)
+    if pct_sin_match > 20:
+        alertas.append(("naranja", f"{pct_sin_match:.1f}% de jugadores sin match con Transfermarkt (umbral: 20%)."))
 
-    # Tabla de umbrales percentiles
-    umbral_rows = ""
-    for col, tit in zip(cols_metricas, titulos_metricas):
-        if col in df_analitico.columns:
-            s = pd.to_numeric(df_analitico[col], errors="coerce").dropna()
-            if len(s) > 4:
-                p50 = s.quantile(0.50)
-                p75 = s.quantile(0.75)
-                p90 = s.quantile(0.90)
-                cov = round(s[s > 0].count() / len(s) * 100, 1)
-                alerta = "baja cobertura" if cov < 40 else ("ok" if cov > 70 else "media")
-                umbral_rows += f"""<tr>
-                  <td><code>{esc_html(tit)}</code></td>
-                  <td style="text-align:right">{p50:.1f}</td>
-                  <td style="text-align:right;font-weight:700;color:var(--a)">{p75:.1f}</td>
-                  <td style="text-align:right">{p90:.1f}</td>
-                  <td style="text-align:right">{cov}% {alerta}</td>
-                </tr>"""
-    umbral_table = f"""
-    <table class="tbl">
-      <thead><tr style="background:{c['primario']};color:white">
-        <th>Metrica</th><th>P50</th><th>P75</th><th>P90</th><th>Cobertura</th>
-      </tr></thead>
-      <tbody>{umbral_rows}</tbody>
-    </table>
-    <p style="font-size:.82rem;color:#666;margin-top:8px">P75 = umbral sugerido para filtrar candidatos en Power BI. Cobertura = % de jugadores con valor &gt; 0 en esa metrica.</p>
-    """ if umbral_rows else "<p>Sin datos suficientes.</p>"
+    bins_fuzzy = [
+        (0, 60, "< 60"),
+        (60, 70, "60 - 70"),
+        (70, 80, "70 - 80"),
+        (80, 90, "80 - 90"),
+        (90, 100, "90 - 100"),
+        (100, None, "100 (exacto)"),
+    ]
+    histo_fuzzy = _tabla_rangos_html(fuzzy_score, bins_fuzzy, color)
 
-    # Histograma + boxplot interactivos. El boxplot usa whiskers IQR y dibuja outliers.
-    histo_box_widget = f"""
-    <div class="chart-card span-2" style="padding:24px">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
-        <h3 style="margin:0">Distribucion y outliers</h3>
-        <label style="font-size:.88rem;color:#555">Metrica:
-          <select id="sel-metrica-hb" style="margin-left:6px;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:.88rem"></select>
-        </label>
-        <span id="hb-summary" style="font-size:.82rem;color:#666"></span>
-      </div>
-      <canvas id="histo-canvas" height="300" style="width:100%;margin-bottom:22px"></canvas>
-      <canvas id="box-canvas" height="210" style="width:100%"></canvas>
-    </div>
-    <script>
-    (function(){{
-      const RAW = {json_histo_box};
-      if(!RAW.data || RAW.data.length < 2 || !RAW.metricas || !RAW.metricas.length) return;
-      const DATA = RAW.data;
-      const METRICAS = RAW.metricas;
-      const COLOR = "{c['primario']}";
-      const sel = document.getElementById('sel-metrica-hb');
-      const summary = document.getElementById('hb-summary');
-      METRICAS.forEach(function(m){{
-        const o = document.createElement('option');
-        o.value = m.col; o.textContent = m.label;
-        sel.appendChild(o);
-      }});
+    seccion2 = f"""
+    <table class="tbl"><thead><tr style="background:{color};color:white">
+      <th>Tipo de match</th><th>N</th><th>%</th>
+    </tr></thead><tbody>
+      <tr><td>Exacto</td><td>{n_exacto:,}</td><td>{(n_exacto / total_jug * 100) if total_jug else 0:.1f}%</td></tr>
+      <tr><td>Fuzzy</td><td>{n_fuzzy:,}</td><td>{(n_fuzzy / total_jug * 100) if total_jug else 0:.1f}%</td></tr>
+      <tr><td>Sin match</td><td>{n_sin_match:,}</td><td>{pct_sin_match:.1f}%</td></tr>
+      <tr><td><strong>Total</strong></td><td><strong>{total_jug:,}</strong></td><td>100.0%</td></tr>
+    </tbody></table>
+    <h4>Distribucion de fuzzy_score</h4>
+    {histo_fuzzy}"""
 
-      const histoCanvas = document.getElementById('histo-canvas');
-      const boxCanvas = document.getElementById('box-canvas');
-      const histoCtx = histoCanvas.getContext('2d');
-      const boxCtx = boxCanvas.getContext('2d');
+    # --- Seccion 3: calidad por tabla de hechos ---
+    filas_seccion3 = ""
+    for nombre, cols_clave in FACT_COLUMNAS_CLAVE.items():
+        df = dim_jugador if nombre == "dim_jugador" else read_csv_safe(output_dir / f"{nombre}.csv")
+        n_filas = len(df)
+        if n_filas == 0:
+            alertas.append(("rojo", f"{nombre} tiene 0 filas."))
 
-      function hexToRgb(hex){{
-        const r = parseInt(hex.slice(1,3),16);
-        const g = parseInt(hex.slice(3,5),16);
-        const b = parseInt(hex.slice(5,7),16);
-        return r+','+g+','+b;
-      }}
+        rango_match = "-"
+        if "match_id" in df.columns and n_filas:
+            mids = pd.to_numeric(df["match_id"], errors="coerce").dropna()
+            if len(mids):
+                rango_match = f"{int(mids.min())} - {int(mids.max())}"
 
-      function values(colKey){{
-        return DATA.map(function(d){{return d[colKey];}}).filter(function(v){{return Number.isFinite(v);}});
-      }}
+        nulos_partes = []
+        for col in cols_clave:
+            if col not in df.columns:
+                nulos_partes.append(f"{esc_html(col)}: ausente")
+                alertas.append(("rojo", f"{nombre}.{col}: columna ausente."))
+                continue
+            pct_null = (df[col].isna().mean() * 100) if n_filas else 100.0
+            nulos_partes.append(f"{esc_html(col)}: {pct_null:.1f}%")
+            if pct_null > 5:
+                alertas.append(("rojo", f"{nombre}.{col}: {pct_null:.1f}% de nulos (umbral: 5%)."))
+            elif pct_null >= 2:
+                alertas.append(("amarillo", f"{nombre}.{col}: {pct_null:.1f}% de nulos (rango 2-5%)."))
 
-      function quantile(sorted, q){{
-        if(!sorted.length) return null;
-        const pos = (sorted.length - 1) * q;
-        const base = Math.floor(pos);
-        const rest = pos - base;
-        if(sorted[base + 1] !== undefined) return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
-        return sorted[base];
-      }}
+        filas_seccion3 += f"""<tr><td><code>{esc_html(nombre)}</code></td>
+        <td>{n_filas:,}</td><td>{rango_match}</td><td>{'<br>'.join(nulos_partes)}</td></tr>"""
 
-      function stats(vals){{
-        const sorted = [...vals].sort(function(a,b){{return a-b;}});
-        const q1 = quantile(sorted, .25);
-        const q2 = quantile(sorted, .50);
-        const q3 = quantile(sorted, .75);
-        const iqr = q3 - q1;
-        const lowFence = q1 - 1.5 * iqr;
-        const highFence = q3 + 1.5 * iqr;
-        const inliers = sorted.filter(function(v){{return v >= lowFence && v <= highFence;}});
-        const outliers = sorted.filter(function(v){{return v < lowFence || v > highFence;}});
-        const mean = vals.reduce(function(a,b){{return a+b;}}, 0) / vals.length;
-        return {{
-          sorted: sorted,
-          min: sorted[0],
-          max: sorted[sorted.length - 1],
-          q1: q1,
-          q2: q2,
-          q3: q3,
-          iqr: iqr,
-          lower: inliers.length ? inliers[0] : sorted[0],
-          upper: inliers.length ? inliers[inliers.length - 1] : sorted[sorted.length - 1],
-          outliers: outliers,
-          mean: mean
-        }};
-      }}
+    seccion3 = f"""<table class="tbl"><thead><tr style="background:{color};color:white">
+    <th>Tabla</th><th>Filas</th><th>Rango match_id</th><th>% Nulos columnas clave</th>
+    </tr></thead><tbody>{filas_seccion3}</tbody></table>"""
 
-      function clear(ctx, canvas, height){{
-        const W = canvas.offsetWidth || canvas.clientWidth || 600;
-        canvas.width = W; canvas.height = height;
-        ctx.clearRect(0, 0, W, height);
-        return W;
-      }}
+    # --- Seccion 4: distribucion de minutos jugados ---
+    fact_minutes = read_csv_safe(output_dir / "fact_minutes.csv")
+    minutos = pd.to_numeric(fact_minutes.get("minutos_jugados", pd.Series(dtype=float)), errors="coerce").dropna()
+    bins_minutos = [
+        (0, 15, "0 - 15"),
+        (15, 30, "15 - 30"),
+        (30, 45, "30 - 45"),
+        (45, 60, "45 - 60"),
+        (60, 75, "60 - 75"),
+        (75, 90, "75 - 90"),
+        (90, None, "90+"),
+    ]
+    histo_minutos = _tabla_rangos_html(minutos, bins_minutos, color)
 
-      function drawEmpty(ctx, text, y){{
-        ctx.fillStyle = '#777';
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText(text, 40, y);
-      }}
+    n_jug_minutos = 0
+    n_sobre_450 = 0
+    pct_sobre_450 = 0.0
+    if "player_id" in fact_minutes.columns and "minutos_jugados" in fact_minutes.columns:
+        minutos_por_jugador = (
+            fact_minutes.assign(minutos_jugados=pd.to_numeric(fact_minutes["minutos_jugados"], errors="coerce"))
+            .groupby("player_id")["minutos_jugados"]
+            .sum()
+        )
+        n_jug_minutos = len(minutos_por_jugador)
+        n_sobre_450 = int((minutos_por_jugador > 450).sum())
+        pct_sobre_450 = (n_sobre_450 / n_jug_minutos * 100) if n_jug_minutos else 0
 
-      function drawHistograma(colKey){{
-        const W = clear(histoCtx, histoCanvas, 300);
-        const vals = values(colKey);
-        if(vals.length < 2){{ drawEmpty(histoCtx, 'Datos insuficientes.', 150); return; }}
-        const st = stats(vals);
-        const min = st.min, max = st.max;
-        const range = max - min || 1;
-        const bins = Math.max(5, Math.min(30, Math.ceil(Math.sqrt(vals.length))));
-        const binSize = range / bins;
-        const counts = Array(bins).fill(0);
-        vals.forEach(function(v){{
-          let idx = Math.floor((v - min) / binSize);
-          if(idx >= bins) idx = bins - 1;
-          counts[idx]++;
-        }});
+    seccion4 = f"""
+    <h4>Distribucion de minutos_jugados (por jugador x partido)</h4>
+    {histo_minutos}
+    <table class="tbl" style="margin-top:14px"><thead><tr style="background:{color};color:white">
+      <th>Metrica</th><th>Valor</th>
+    </tr></thead><tbody>
+      <tr><td>Jugadores que superan 450 min totales</td><td>{n_sobre_450:,} ({pct_sobre_450:.1f}% del universo)</td></tr>
+    </tbody></table>"""
 
-        const maxCount = Math.max.apply(null, counts) || 1;
-        const pad = {{l:54,r:22,t:18,b:48}};
-        const W2 = W - pad.l - pad.r, H2 = 300 - pad.t - pad.b;
-        const rgb = hexToRgb(COLOR);
-        const toX = function(v){{return pad.l + ((v - min) / range) * W2;}};
+    # --- Seccion 5: alertas automaticas ---
+    if not alertas:
+        alertas_li = '<li class="verde">Verde: todo dentro de los umbrales.</li>'
+    else:
+        alertas_li = "".join(f'<li class="{nivel}">{nivel.capitalize()}: {esc_html(texto)}</li>' for nivel, texto in alertas)
 
-        histoCtx.strokeStyle = '#d1d5db'; histoCtx.lineWidth = 1;
-        histoCtx.beginPath(); histoCtx.moveTo(pad.l, pad.t); histoCtx.lineTo(pad.l, pad.t + H2); histoCtx.lineTo(pad.l + W2, pad.t + H2); histoCtx.stroke();
+    seccion5 = f"""<div class="card"><ul class="alertas">{alertas_li}</ul></div>"""
 
-        counts.forEach(function(cnt, i){{
-          const h = (cnt / maxCount) * H2;
-          const x = pad.l + (i / bins) * W2;
-          const w = Math.max(1, W2 / bins - 2);
-          histoCtx.fillStyle = 'rgba(' + rgb + ',0.68)';
-          histoCtx.fillRect(x, pad.t + H2 - h, w, h);
-        }});
-
-        histoCtx.setLineDash([]);
-        histoCtx.strokeStyle = '#333'; histoCtx.lineWidth = 1.6;
-        histoCtx.beginPath(); histoCtx.moveTo(toX(st.mean), pad.t); histoCtx.lineTo(toX(st.mean), pad.t + H2); histoCtx.stroke();
-        histoCtx.strokeStyle = '#777'; histoCtx.setLineDash([4,4]);
-        histoCtx.beginPath(); histoCtx.moveTo(toX(st.q2), pad.t); histoCtx.lineTo(toX(st.q2), pad.t + H2); histoCtx.stroke();
-        histoCtx.setLineDash([]);
-
-        histoCtx.fillStyle = '#555'; histoCtx.font = '11px Arial'; histoCtx.textAlign = 'center';
-        [0,.25,.5,.75,1].forEach(function(t){{
-          const xv = min + t * range;
-          histoCtx.fillText(xv.toFixed(1), toX(xv), pad.t + H2 + 17);
-        }});
-        histoCtx.fillText('Media ' + st.mean.toFixed(2), pad.l + W2 * .28, 286);
-        histoCtx.fillText('Mediana ' + st.q2.toFixed(2), pad.l + W2 * .72, 286);
-      }}
-
-      function drawBoxplot(colKey){{
-        const W = clear(boxCtx, boxCanvas, 210);
-        const vals = values(colKey);
-        if(vals.length < 2){{ drawEmpty(boxCtx, 'Datos insuficientes.', 105); return; }}
-        const st = stats(vals);
-        const scaleMin = Math.min(st.lower, st.min);
-        const scaleMax = Math.max(st.upper, st.max);
-        const range = scaleMax - scaleMin || 1;
-        const pad = {{l:58,r:26,t:20,b:42}};
-        const W2 = W - pad.l - pad.r, H2 = 210 - pad.t - pad.b;
-        const toX = function(v){{return pad.l + ((v - scaleMin) / range) * W2;}};
-        const y = pad.t + H2 / 2;
-        const boxH = 54;
-        const rgb = hexToRgb(COLOR);
-
-        boxCtx.strokeStyle = '#d1d5db'; boxCtx.lineWidth = 1;
-        boxCtx.beginPath(); boxCtx.moveTo(pad.l, y); boxCtx.lineTo(pad.l + W2, y); boxCtx.stroke();
-
-        boxCtx.strokeStyle = '#777'; boxCtx.lineWidth = 1.5;
-        boxCtx.beginPath(); boxCtx.moveTo(toX(st.lower), y); boxCtx.lineTo(toX(st.q1), y); boxCtx.moveTo(toX(st.q3), y); boxCtx.lineTo(toX(st.upper), y); boxCtx.stroke();
-        boxCtx.beginPath(); boxCtx.moveTo(toX(st.lower), y - 22); boxCtx.lineTo(toX(st.lower), y + 22); boxCtx.moveTo(toX(st.upper), y - 22); boxCtx.lineTo(toX(st.upper), y + 22); boxCtx.stroke();
-
-        boxCtx.fillStyle = 'rgba(' + rgb + ',0.48)';
-        boxCtx.strokeStyle = '#333'; boxCtx.lineWidth = 2;
-        boxCtx.fillRect(toX(st.q1), y - boxH / 2, Math.max(1, toX(st.q3) - toX(st.q1)), boxH);
-        boxCtx.strokeRect(toX(st.q1), y - boxH / 2, Math.max(1, toX(st.q3) - toX(st.q1)), boxH);
-
-        boxCtx.strokeStyle = '#111'; boxCtx.lineWidth = 2.5;
-        boxCtx.beginPath(); boxCtx.moveTo(toX(st.q2), y - boxH / 2); boxCtx.lineTo(toX(st.q2), y + boxH / 2); boxCtx.stroke();
-
-        boxCtx.fillStyle = '#b91c1c';
-        st.outliers.slice(0, 80).forEach(function(v){{
-          boxCtx.beginPath(); boxCtx.arc(toX(v), y, 3, 0, 2 * Math.PI); boxCtx.fill();
-        }});
-
-        boxCtx.fillStyle = '#555'; boxCtx.font = '11px Arial'; boxCtx.textAlign = 'center';
-        [0,.25,.5,.75,1].forEach(function(t){{
-          const xv = scaleMin + t * range;
-          boxCtx.fillText(xv.toFixed(1), toX(xv), pad.t + H2 + 28);
-        }});
-        boxCtx.textAlign = 'left';
-        boxCtx.fillText('Q1 ' + st.q1.toFixed(2) + ' | Q2 ' + st.q2.toFixed(2) + ' | Q3 ' + st.q3.toFixed(2) + ' | outliers ' + st.outliers.length, pad.l, 20);
-        summary.textContent = 'N=' + vals.length + ' | outliers IQR=' + st.outliers.length;
-      }}
-
-      function drawAll(){{
-        drawHistograma(sel.value);
-        drawBoxplot(sel.value);
-      }}
-
-      sel.addEventListener('change', drawAll);
-      drawAll();
-      window.addEventListener('resize', drawAll);
-    }})();
-    </script>"""
-
-    # Scatter interactivo JS
-    scatter_interactivo = f"""
-    <div class="chart-card span-2" style="padding:24px">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap">
-        <h3 style="margin:0">Rendimiento vs valor de mercado</h3>
-        <label style="font-size:.88rem;color:#555">Metrica eje X:
-          <select id="sel-metrica" style="margin-left:6px;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:.88rem"></select>
-        </label>
-        <span id="scatter-r" style="font-size:.82rem;color:#888"></span>
-      </div>
-      <canvas id="scatter-canvas" height="380" style="width:100%;cursor:crosshair"></canvas>
-      <div id="scatter-tooltip" style="position:fixed;background:rgba(30,30,30,.92);color:#fff;padding:7px 12px;border-radius:7px;font-size:.82rem;pointer-events:none;display:none;z-index:99;max-width:220px;line-height:1.5"></div>
-    </div>
-    <script>
-    (function(){{
-      const RAW = {json_scatter};
-      if(!RAW.data || RAW.data.length < 5) return;
-      const DATA = RAW.data;
-      const METRICAS = RAW.metricas;
-      const COLOR = "{c['primario']}";
-      const sel = document.getElementById('sel-metrica');
-      METRICAS.forEach(function(m,i){{
-        const o = document.createElement('option');
-        o.value = m.col; o.textContent = m.label;
-        sel.appendChild(o);
-      }});
-
-      const canvas = document.getElementById('scatter-canvas');
-      const tt = document.getElementById('scatter-tooltip');
-      const ctx = canvas.getContext('2d');
-      let currentPoints = [];
-
-      function hexToRgb(hex){{
-        const r = parseInt(hex.slice(1,3),16);
-        const g = parseInt(hex.slice(3,5),16);
-        const b = parseInt(hex.slice(5,7),16);
-        return r+','+g+','+b;
-      }}
-
-      function linReg(xs,ys){{
-        const n=xs.length; if(n<3) return null;
-        const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
-        let num=0,den=0;
-        for(let i=0;i<n;i++){{num+=(xs[i]-mx)*(ys[i]-my);den+=(xs[i]-mx)**2;}}
-        if(den===0) return null;
-        const m=num/den, b=my-m*mx;
-        const ss_res=ys.reduce((a,y,i)=>a+(y-(m*xs[i]+b))**2,0);
-        const ss_tot=ys.reduce((a,y)=>a+(y-my)**2,0);
-        const r2=ss_tot===0?0:1-ss_res/ss_tot;
-        return {{m,b,r2}};
-      }}
-
-      function median(arr){{
-        const s=[...arr].sort((a,b)=>a-b);
-        const mid=Math.floor(s.length/2);
-        return s.length%2===0?(s[mid-1]+s[mid])/2:s[mid];
-      }}
-
-      function draw(colKey){{
-        const W=canvas.offsetWidth; canvas.width=W; canvas.height=380;
-        const pts=DATA.filter(d=>d[colKey]!=null && d.vm!=null);
-        if(pts.length<5){{ ctx.fillStyle='#999'; ctx.font='14px Arial'; ctx.fillText('Datos insuficientes para esta metrica.',40,200); return; }}
-        const xs=pts.map(d=>d[colKey]), ys=pts.map(d=>d.vm);
-        const xmin=Math.min(...xs), xmax=Math.max(...xs), ymin=Math.min(...ys), ymax=Math.max(...ys);
-        const pad={{l:60,r:24,t:20,b:50}};
-        const W2=W-pad.l-pad.r, H2=380-pad.t-pad.b;
-        const toX=v=>pad.l+(v-xmin)/(xmax-xmin||1)*W2;
-        const toY=v=>pad.t+H2-(v-ymin)/(ymax-ymin||1)*H2;
-
-        ctx.clearRect(0,0,W,380);
-
-        // Lineas de mediana
-        const mx=median(xs), my=median(ys);
-        ctx.setLineDash([5,4]); ctx.strokeStyle='#cccccc'; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.moveTo(toX(mx),pad.t); ctx.lineTo(toX(mx),pad.t+H2); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(pad.l,toY(my)); ctx.lineTo(pad.l+W2,toY(my)); ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Regresion
-        const reg=linReg(xs,ys);
-        if(reg){{
-          ctx.strokeStyle='rgba('+hexToRgb(COLOR)+',.45)'; ctx.lineWidth=1.8;
-          ctx.beginPath(); ctx.moveTo(toX(xmin),toY(reg.m*xmin+reg.b)); ctx.lineTo(toX(xmax),toY(reg.m*xmax+reg.b)); ctx.stroke();
-          document.getElementById('scatter-r').textContent='R^2 = '+reg.r2.toFixed(3);
-        }}
-
-        // Ejes
-        ctx.strokeStyle='#cccccc'; ctx.lineWidth=1; ctx.setLineDash([]);
-        ctx.beginPath(); ctx.moveTo(pad.l,pad.t); ctx.lineTo(pad.l,pad.t+H2); ctx.lineTo(pad.l+W2,pad.t+H2); ctx.stroke();
-        ctx.fillStyle='#555'; ctx.font='11px Arial'; ctx.textAlign='center';
-        [0,.25,.5,.75,1].forEach(function(t){{
-          const xv=xmin+t*(xmax-xmin), px=toX(xv);
-          ctx.fillText(xv.toFixed(0),px,pad.t+H2+16);
-        }});
-        ctx.textAlign='right';
-        [0,.25,.5,.75,1].forEach(function(t){{
-          const yv=ymin+t*(ymax-ymin), py=toY(yv);
-          ctx.fillText(yv.toFixed(1)+'M',pad.l-6,py+4);
-        }});
-
-        // Puntos
-        currentPoints=[];
-        pts.forEach(function(d){{
-          const px=toX(d[colKey]), py=toY(d.vm);
-          ctx.beginPath(); ctx.arc(px,py,5,0,2*Math.PI);
-          ctx.fillStyle='rgba('+hexToRgb(COLOR)+',.55)';
-          ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=1;
-          ctx.fill(); ctx.stroke();
-          currentPoints.push({{px,py,d}});
-        }});
-      }}
-
-      function getColLabel(colKey){{
-        const m=METRICAS.find(function(x){{return x.col===colKey;}});
-        return m?m.label:colKey;
-      }}
-
-      canvas.addEventListener('mousemove',function(e){{
-        const rect=canvas.getBoundingClientRect();
-        const mx=e.clientX-rect.left, my=e.clientY-rect.top;
-        let closest=null, bestD=Infinity;
-        currentPoints.forEach(function(p){{
-          const d=Math.hypot(p.px-mx,p.py-my);
-          if(d<bestD){{bestD=d;closest=p;}}
-        }});
-        if(closest && bestD<18){{
-          const colKey=sel.value;
-          tt.style.display='block';
-          tt.style.left=(e.clientX+14)+'px'; tt.style.top=(e.clientY-10)+'px';
-          const name=closest.d.n||'Jugador';
-          tt.innerHTML='<strong>'+name+'</strong><br>'+getColLabel(colKey)+': '+closest.d[colKey]+'<br>Valor: '+closest.d.vm.toFixed(1)+' M EUR';
-        }} else {{ tt.style.display='none'; }}
-      }});
-      canvas.addEventListener('mouseleave',function(){{tt.style.display='none';}});
-
-      sel.addEventListener('change',function(){{draw(sel.value);}});
-      draw(sel.value);
-      window.addEventListener('resize',function(){{draw(sel.value);}});
-    }})();
-    </script>"""
-
-    return f"""<!DOCTYPE html>
+    html_out = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>EDA v11 - {esc_html(perfil)}</title>
+<title>Reporte de conformidad - Pipeline v12</title>
 <style>
-  :root{{--p:{c['primario']};--s:{c['secundario']};--f:{c['fondo']};--a:{c['acento']};--txt:#1f2937;--b:#e5e7eb;}}
-  *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--f);color:var(--txt);line-height:1.55}}
-  .header{{background:linear-gradient(135deg,var(--a),var(--p),var(--s));color:white;padding:42px 36px}}
-  .header h1{{margin:0 0 6px;font-size:2.2rem}} .header p{{max-width:980px}}
-  .badge{{display:inline-block;margin:4px 6px 0 0;padding:5px 12px;border:1px solid rgba(255,255,255,.35);border-radius:999px;background:rgba(255,255,255,.16);font-size:.85rem}}
-  .container{{max-width:1200px;margin:0 auto;padding:34px 22px}} .section{{margin-bottom:42px}}
-  .sec-title{{border-left:5px solid var(--p);padding-left:12px;color:var(--a);font-size:1.35rem;font-weight:700;margin-bottom:18px}}
-  .card,.chart-card{{background:white;border:1px solid var(--b);border-radius:10px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.04)}}
-  .charts-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}}
-  .span-2{{grid-column:span 2}} img{{max-width:100%;border-radius:6px}} .wide-img{{width:100%}}
-  .tbl{{width:100%;border-collapse:collapse;font-size:.88rem}} .tbl th,.tbl td{{padding:9px 12px;text-align:right;border-bottom:1px solid var(--b)}}
+  *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f7fa;color:#1f2937;line-height:1.55}}
+  .header{{background:linear-gradient(135deg,#0D47A1,{color});color:white;padding:42px 36px}}
+  .header h1{{margin:0 0 6px;font-size:2.0rem}}
+  .container{{max-width:1100px;margin:0 auto;padding:34px 22px}} .section{{margin-bottom:42px}}
+  .sec-title{{border-left:5px solid {color};padding-left:12px;color:#0D47A1;font-size:1.3rem;font-weight:700;margin-bottom:18px}}
+  .card{{background:white;border:1px solid #e5e7eb;border-radius:10px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.04)}}
+  .tbl{{width:100%;border-collapse:collapse;font-size:.88rem;background:white}} .tbl th,.tbl td{{padding:9px 12px;text-align:right;border-bottom:1px solid #e5e7eb}}
   .tbl th:first-child,.tbl td:first-child{{text-align:left}} .two-cols{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
-  code{{background:var(--f);padding:2px 5px;border-radius:4px;color:var(--a)}} li{{margin:8px 0}}
-  @media(max-width:760px){{.two-cols{{grid-template-columns:1fr}}.span-2{{grid-column:span 1}}.header h1{{font-size:1.7rem}}}}
+  .bar{{height:10px;border-radius:4px}}
+  code{{background:#f5f7fa;padding:2px 5px;border-radius:4px;color:#0D47A1}}
+  ul.alertas{{list-style:none;padding:0;margin:0}} ul.alertas li{{padding:8px 12px;margin:6px 0;border-radius:6px;font-weight:600}}
+  .rojo{{background:#fde2e1;color:#b91c1c}} .naranja{{background:#fef0d8;color:#b45309}}
+  .amarillo{{background:#fef9c3;color:#854d0e}} .verde{{background:#dcfce7;color:#15803d}}
+  @media(max-width:760px){{.two-cols{{grid-template-columns:1fr}}}}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>EDA v11 - {esc_html(perfil)}</h1>
-  <p>{esc_html(subtitulo)}</p>
-  <p><em>{esc_html(filosofia)}</em></p>
-  <span class="badge">{len(df_analitico):,} jugadores analizados</span>
-  <span class="badge">{len(cols_metricas)} metricas</span>
-  <span class="badge">La Liga 2014-2017</span>
-  <span class="badge">Criterios para Power BI</span>
+  <h1>Reporte de conformidad - Pipeline v12</h1>
+  <p>Verificacion estructural del output para Power BI. No incluye analisis ni recomendaciones.</p>
 </div>
 <div class="container">
-  <div class="section">
-    <div class="sec-title">1. Universo del perfil</div>
-    <div class="card">{t_universo}</div>
-  </div>
-  <div class="section">
-    <div class="sec-title">2. Umbrales por percentil</div>
-    <div class="card">{umbral_table}</div>
-  </div>
-  <div class="section">
-    <div class="sec-title">3. Estadisticas descriptivas</div>
-    <div class="card" style="overflow-x:auto">{t_stats}</div>
-  </div>
-  <div class="section">
-    <div class="sec-title">4. Outliers IQR - alerta de distorsion en rankings</div>
-    <div class="card" style="overflow-x:auto">{t_iqr}</div>
-  </div>
-  <div class="section">
-    <div class="sec-title">5. Distribuciones y boxplot IQR</div>
-    <div class="charts-grid">{histo_box_widget}</div>
-  </div>
-  <div class="section">
-    <div class="sec-title">6. Correlacion con valor de mercado</div>
-    <div class="charts-grid">{hist_val_block}{cuartiles_block}{scatter_interactivo}</div>
-  </div>
-  <div class="section">
-    <div class="sec-title">7. Criterios accionables para Power BI</div>
-    <div class="card"><ul>{hallazgos_li}</ul></div>
-  </div>
+  <div class="section"><div class="sec-title">1. Resumen de ejecucion</div><div class="card">{seccion1}</div></div>
+  <div class="section"><div class="sec-title">2. Cobertura del matching StatsBomb-Transfermarkt</div><div class="card">{seccion2}</div></div>
+  <div class="section"><div class="sec-title">3. Calidad por tabla de hechos</div><div class="card" style="overflow-x:auto">{seccion3}</div></div>
+  <div class="section"><div class="sec-title">4. Distribucion de minutos jugados</div><div class="card">{seccion4}</div></div>
+  <div class="section"><div class="sec-title">5. Alertas automaticas</div>{seccion5}</div>
 </div>
 </body></html>"""
 
-
-def valor_mercado_promedio(dim_valoracion: pd.DataFrame, player_ids) -> pd.DataFrame:
-    if dim_valoracion.empty:
-        return pd.DataFrame({"player_id": player_ids, "valor_mercado_promedio": np.nan})
-    return (
-        dim_valoracion[dim_valoracion["player_id"].isin(player_ids)]
-        .groupby("player_id")["market_value_in_eur"]
-        .mean()
-        .reset_index()
-        .rename(columns={"market_value_in_eur": "valor_mercado_promedio"})
-    )
-
-
-def generar_reportes_eda(output_dir: Path, dim_jugador: pd.DataFrame, dim_valoracion: pd.DataFrame) -> None:
-    warnings.filterwarnings("ignore")
-    plt = setup_plotting()
-    dim_jugador = require_columns(
-        dim_jugador.copy(),
-        ["player_id", "posicion_habitual", "equipo_habitual", "market_value_in_eur"],
-    )
-    dim_jugador_slim = dim_jugador[
-        ["player_id", "posicion_habitual", "equipo_habitual", "market_value_in_eur"]
-    ].copy()
-
-    def completar(df, cols):
-        for col in cols:
-            if col not in df.columns:
-                df[col] = np.nan
-        return df
-
-    def escribir_reporte(nombre_archivo, perfil, subtitulo, filosofia, df, cols, tits, color_key, metrica_principal, label_principal, hallazgos):
-        c = COLORES[color_key]
-        img_hist_val = grafico_hist_valoracion(df["valor_mercado_promedio"], c["primario"], c["fondo"], plt)
-        img_scatter = ""  # compatibilidad legacy; el scatter real es interactivo
-        img_cuartiles = grafico_boxplot_cuartiles(df, metrica_principal, c["primario"], c["fondo"], label_principal, plt)
-        json_scatter = preparar_json_scatter(df, cols, tits)
-        json_histo_box = preparar_json_histo_box(df, cols, tits)
-        html = generar_html_perfil(
-            perfil,
-            subtitulo,
-            filosofia,
-            df,
-            cols,
-            tits,
-            [],
-            "",
-            img_hist_val,
-            img_scatter,
-            img_cuartiles,
-            tabla_stats_html(df, cols, tits, c["primario"]),
-            tabla_iqr_html(df, cols, tits, c["primario"]),
-            tabla_universo_html(df, c["primario"]),
-            c,
-            hallazgos,
-            json_scatter=json_scatter,
-            json_histo_box=json_histo_box,
-        )
-        (output_dir / nombre_archivo).write_text(html, encoding="utf-8")
-        print(f"   OK {nombre_archivo} - {len(df):,} jugadores")
-
-    print("\n-- BLOQUE 6: EDA por perfil")
-
-    df_shot = completar(read_csv_safe(output_dir / "fact_shot.csv", on_bad_lines="skip"), ["player_id", "shot_statsbomb_xg", "location_x", "shot_type"])
-    df_shot = to_num(df_shot, ["player_id", "shot_statsbomb_xg", "location_x", "es_gol", "es_al_arco"])
-    df_pres = completar(read_csv_safe(output_dir / "fact_pressure.csv", on_bad_lines="skip"), ["player_id", "location_x", "location_y"])
-    df_pres = to_num(df_pres, ["player_id", "location_x", "location_y"])
-    df_duel = completar(read_csv_safe(output_dir / "fact_duel.csv", on_bad_lines="skip"), ["player_id", "location_x", "location_y", "es_duelo_ganado"])
-    df_duel = to_num(df_duel, ["player_id", "location_x", "location_y", "es_duelo_ganado"])
-    df_recv = completar(read_csv_safe(output_dir / "fact_ball_receipt.csv", on_bad_lines="skip"), ["player_id", "location_x", "es_recepcion_exitosa"])
-    df_recv = to_num(df_recv, ["player_id", "location_x", "es_recepcion_exitosa"])
-    df_pass = completar(read_csv_safe(output_dir / "fact_pass.csv", on_bad_lines="skip"), ["player_id", "location_x", "location_y", "pass_end_x", "pass_end_y", "es_pase_completo", "under_pressure"])
-    df_pass = to_num(df_pass, ["player_id", "location_x", "location_y", "pass_end_x", "pass_end_y", "es_pase_completo"])
-    df_pass = to_bool(df_pass, ["under_pressure"])
-    df_carry = completar(read_csv_safe(output_dir / "fact_carry.csv", on_bad_lines="skip"), ["player_id", "location_x", "location_y", "carry_end_x", "carry_end_y", "carry_distancia"])
-    df_carry = to_num(df_carry, ["player_id", "location_x", "location_y", "carry_end_x", "carry_end_y", "carry_distancia"])
-    df_misc = completar(read_csv_safe(output_dir / "fact_miscontrol.csv", on_bad_lines="skip"), ["player_id"])
-    df_misc = to_num(df_misc, ["player_id"])
-    df_int = completar(read_csv_safe(output_dir / "fact_interception.csv", on_bad_lines="skip"), ["player_id", "location_x", "es_intercepcion_exitosa"])
-    df_int = to_num(df_int, ["player_id", "location_x", "es_intercepcion_exitosa"])
-    df_clear = completar(read_csv_safe(output_dir / "fact_clearance.csv", on_bad_lines="skip"), ["player_id", "clearance_aerial_won"])
-    df_clear = to_num(df_clear, ["player_id", "clearance_aerial_won"])
-    df_drib = completar(read_csv_safe(output_dir / "fact_dribble.csv", on_bad_lines="skip"), ["player_id", "location_x", "es_dribble_exitoso"])
-    df_drib = to_num(df_drib, ["player_id", "location_x", "es_dribble_exitoso"])
-
-    posiciones_del = {"Center Forward", "Left Wing", "Right Wing", "Left Center Forward", "Right Center Forward", "Secondary Striker"}
-    players_del = dim_jugador_slim[dim_jugador_slim["posicion_habitual"].isin(posiciones_del)]["player_id"].unique()
-    xg_sp = df_shot[df_shot["player_id"].isin(players_del) & (df_shot.get("shot_type", serie_vacia(df_shot.index, "object")) != "Penalty")].groupby("player_id")["shot_statsbomb_xg"].sum().reset_index().rename(columns={"shot_statsbomb_xg": "xg_sin_penal"})
-    presiones = df_pres[df_pres["player_id"].isin(players_del) & (df_pres["location_x"] > 70)].groupby("player_id").size().reset_index(name="presiones_ultimo_tercio")
-    duelos_cr = df_duel[df_duel["player_id"].isin(players_del) & (df_duel["location_x"] > 60) & (df_duel["es_duelo_ganado"] == 1)].groupby("player_id").size().reset_index(name="duelos_campo_rival")
-    recepciones = df_recv[df_recv["player_id"].isin(players_del) & (df_recv["location_x"] > 60)].groupby("player_id").size().reset_index(name="recepciones_campo_rival")
-    dribbles = df_drib[df_drib["player_id"].isin(players_del) & (df_drib["location_x"] > 60) & (df_drib["es_dribble_exitoso"] == 1)].groupby("player_id").size().reset_index(name="dribbles_exitosos")
-    df_del = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_del)].merge(xg_sp, on="player_id", how="left").merge(presiones, on="player_id", how="left").merge(duelos_cr, on="player_id", how="left").merge(recepciones, on="player_id", how="left").merge(dribbles, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_del), on="player_id", how="left").fillna(0)
-    cols_del = ["xg_sin_penal", "presiones_ultimo_tercio", "duelos_campo_rival", "recepciones_campo_rival", "dribbles_exitosos"]
-    tits_del = ["xG sin penal", "Presiones ultimo tercio", "Duelos ganados campo rival", "Recepciones campo rival", "Dribbles exitosos"]
-    escribir_reporte(
-        "eda_v11_delanteros.html",
-        "Delanteros",
-        "9 falso cruyffista - presion, movilidad y xG sin penal.",
-        "Atacantes que generan peligro, presionan alto y participan fuera del area.",
-        df_del,
-        cols_del,
-        tits_del,
-        "delantero",
-        "xg_sin_penal",
-        "xG sin penal",
-        [
-            f"Universo: {len(df_del)} delanteros. Umbral sugerido de xG: percentil 75 = {df_del['xg_sin_penal'].quantile(.75):.1f}.",
-            f"Dribbles exitosos: percentil 75 = {df_del['dribbles_exitosos'].quantile(.75):.0f}; indicador de desequilibrio y movilidad en campo rival.",
-            "Score sugerido en Power BI: percentil(xG) * 0.35 + percentil(presiones) * 0.25 + percentil(recepciones) * 0.20 + percentil(dribbles) * 0.20.",
-        ],
-    )
-
-    posiciones_mid = {"Center Defensive Midfield", "Center Midfield", "Left Center Midfield", "Right Center Midfield", "Left Midfield", "Right Midfield", "Left Defensive Midfield", "Right Defensive Midfield", "Center Attacking Midfield"}
-    players_mid = dim_jugador_slim[dim_jugador_slim["posicion_habitual"].isin(posiciones_mid)]["player_id"].unique()
-    pases_prog = df_pass[df_pass["player_id"].isin(players_mid) & (df_pass["pass_end_x"] > df_pass["location_x"] + 8)].groupby("player_id").size().reset_index(name="pases_progresivos")
-    total_pases = df_pass[df_pass["player_id"].isin(players_mid)].groupby("player_id").size().reset_index(name="total_pases")
-    cond_prog = df_carry[df_carry["player_id"].isin(players_mid) & (df_carry["carry_end_x"] > df_carry["location_x"] + 5)].groupby("player_id").size().reset_index(name="conducciones_progresivas")
-    acc_presion = df_pass[df_pass["player_id"].isin(players_mid) & (df_pass["under_pressure"] == 1) & (df_pass["es_pase_completo"] == 1)].groupby("player_id").size().reset_index(name="pases_exitosos_bajo_presion")
-    perdidas = df_misc[df_misc["player_id"].isin(players_mid)].groupby("player_id").size().reset_index(name="perdidas_balon")
-    df_mid = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_mid)].merge(pases_prog, on="player_id", how="left").merge(total_pases, on="player_id", how="left").merge(cond_prog, on="player_id", how="left").merge(acc_presion, on="player_id", how="left").merge(perdidas, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_mid), on="player_id", how="left").fillna(0)
-    df_mid["ratio_pases_prog"] = np.where(df_mid["total_pases"] > 0, df_mid["pases_progresivos"] / df_mid["total_pases"], 0)
-    cols_mid = ["pases_progresivos", "ratio_pases_prog", "conducciones_progresivas", "pases_exitosos_bajo_presion", "perdidas_balon"]
-    tits_mid = ["Pases progresivos", "Ratio pases progresivos", "Conducciones progresivas", "Pases exitosos bajo presion", "Perdidas de balon"]
-    escribir_reporte(
-        "eda_v11_mediocampistas.html",
-        "Mediocampistas",
-        "Entre lineas - progresion, presion y bajo error.",
-        "Jugadores que aceleran el juego hacia adelante y resisten la presion.",
-        df_mid,
-        cols_mid,
-        tits_mid,
-        "mediocampista",
-        "pases_progresivos",
-        "Pases progresivos",
-        [
-            f"Universo: {len(df_mid)} mediocampistas. P75 pases progresivos = {df_mid['pases_progresivos'].quantile(.75):.0f}.",
-            "En Power BI: filtrar jugadores con total_pases > 300 antes de rankear ratio_pases_prog.",
-        ],
-    )
-
-    posiciones_def = {"Center Back", "Left Center Back", "Right Center Back"}
-    players_def = dim_jugador_slim[dim_jugador_slim["posicion_habitual"].isin(posiciones_def)]["player_id"].unique()
-    duelos_zona = df_duel[df_duel["player_id"].isin(players_def) & (df_duel["location_x"] > 40) & (df_duel["es_duelo_ganado"] == 1)].groupby("player_id").size().reset_index(name="duelos_zona_alta")
-    intercep_cr = df_int[df_int["player_id"].isin(players_def) & (df_int["location_x"] > 60)].groupby("player_id").size().reset_index(name="intercepciones_campo_rival")
-    pases_prog_def = df_pass[df_pass["player_id"].isin(players_def) & (df_pass["location_x"] < 40) & (df_pass["pass_end_x"] > df_pass["location_x"] + 15)].groupby("player_id").size().reset_index(name="pases_prog_desde_atras")
-    # Mantiene el reemplazo de despejes_aereos por un proxy mas consistente con el perfil.
-    # Proxy de "correccion a campo abierto": carries en zona media (x 35-65) con avance >= 8m.
-    carrys_zona_media = df_carry[
-        df_carry["player_id"].isin(players_def)
-        & (df_carry["location_x"] >= 35) & (df_carry["location_x"] <= 65)
-        & (df_carry["carry_end_x"] > df_carry["location_x"] + 8)
-    ].groupby("player_id").size().reset_index(name="carrys_progresivos_zona_media")
-    df_def = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_def)].merge(duelos_zona, on="player_id", how="left").merge(intercep_cr, on="player_id", how="left").merge(pases_prog_def, on="player_id", how="left").merge(carrys_zona_media, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_def), on="player_id", how="left").fillna(0)
-    cols_def = ["duelos_zona_alta", "intercepciones_campo_rival", "pases_prog_desde_atras", "carrys_progresivos_zona_media"]
-    tits_def = ["Duelos ganados zona alta", "Intercepciones campo rival", "Pases progresivos desde atras", "Carrys progresivos zona media"]
-    escribir_reporte(
-        "eda_v11_defensores.html",
-        "Defensores",
-        "Libero moderno - zonas altas y salida limpia.",
-        "Centrales que defienden lejos del arco, interceptan en avance y corrigen conduciendo.",
-        df_def,
-        cols_def,
-        tits_def,
-        "defensor",
-        "duelos_zona_alta",
-        "Duelos ganados zona alta",
-        [
-            f"Universo: {len(df_def)} defensores. P75 duelos zona alta = {df_def['duelos_zona_alta'].quantile(.75):.0f}.",
-            f"P75 carrys_progresivos_zona_media = {df_def['carrys_progresivos_zona_media'].quantile(.75):.0f}; usar como umbral minimo en Power BI.",
-            "Score sugerido en Power BI: score defensor = duelos_zona_alta*0.35 + intercepciones_campo_rival*0.30 + pases_prog_desde_atras*0.20 + carrys_progresivos_zona_media*0.15.",
-            "Despejes aereos se mantiene eliminado porque tiene datos insuficientes y contradice el perfil de central rapido buscado.",
-        ],
-    )
-
-    posiciones_lat = {"Left Back", "Right Back", "Left Wing Back", "Right Wing Back", "Left Midfield", "Right Midfield", "Left Defensive Midfield", "Right Defensive Midfield"}
-    players_lat = dim_jugador_slim[dim_jugador_slim["posicion_habitual"].isin(posiciones_lat)]["player_id"].unique()
-    duelos_def = df_duel[df_duel["player_id"].isin(players_lat) & (df_duel["es_duelo_ganado"] == 1)].groupby("player_id").size().reset_index(name="duelos_defensivos_ganados")
-    cond_centro = df_carry[df_carry["player_id"].isin(players_lat) & (((df_carry["location_y"] < 30) & (df_carry["carry_end_y"] > df_carry["location_y"])) | ((df_carry["location_y"] > 50) & (df_carry["carry_end_y"] < df_carry["location_y"])))].groupby("player_id").size().reset_index(name="conducciones_hacia_centro")
-    pases_adentro = df_pass[df_pass["player_id"].isin(players_lat) & (((df_pass["location_y"] < 25) & (df_pass["pass_end_y"] > df_pass["location_y"] + 5)) | ((df_pass["location_y"] > 55) & (df_pass["pass_end_y"] < df_pass["location_y"] - 5)))].groupby("player_id").size().reset_index(name="pases_hacia_adentro")
-    presiones_banda = df_pres[df_pres["player_id"].isin(players_lat) & ((df_pres["location_y"] < 20) | (df_pres["location_y"] > 60))].groupby("player_id").size().reset_index(name="presiones_en_banda")
-    df_lat = dim_jugador_slim[dim_jugador_slim["player_id"].isin(players_lat)].merge(duelos_def, on="player_id", how="left").merge(cond_centro, on="player_id", how="left").merge(pases_adentro, on="player_id", how="left").merge(presiones_banda, on="player_id", how="left").merge(valor_mercado_promedio(dim_valoracion, players_lat), on="player_id", how="left").fillna(0)
-    cols_lat = ["duelos_defensivos_ganados", "conducciones_hacia_centro", "pases_hacia_adentro", "presiones_en_banda"]
-    tits_lat = ["Duelos defensivos ganados", "Conducciones hacia el centro", "Pases hacia adentro", "Presiones en banda"]
-    escribir_reporte(
-        "eda_v11_laterales.html",
-        "Laterales",
-        "Lateral invertido - versatilidad y juego interior.",
-        "Laterales firmes en el duelo y capaces de cerrarse hacia zonas interiores.",
-        df_lat,
-        cols_lat,
-        tits_lat,
-        "lateral",
-        "conducciones_hacia_centro",
-        "Conducciones hacia el centro",
-        [
-            f"Universo: {len(df_lat)} laterales. P75 duelos defensivos = {df_lat['duelos_defensivos_ganados'].quantile(.75):.0f}.",
-            "Score sugerido en Power BI: score lateral = duelos_defensivos_ganados * 0.30 + conducciones_hacia_centro * 0.35 + pases_hacia_adentro * 0.35.",
-        ],
-    )
+    (output_dir / "reporte_conformidad.html").write_text(html_out, encoding="utf-8")
+    print(f"   OK reporte_conformidad.html generado en {tiempo_total:.1f}s")
 
 
 def zip_output(output_dir: Path, zip_name: str) -> Path:
@@ -2264,17 +1671,21 @@ def zip_output(output_dir: Path, zip_name: str) -> Path:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pipeline de scouting v11.")
+    parser = argparse.ArgumentParser(description="Pipeline de scouting v12.")
     parser.add_argument("--repo-path", type=Path, default=Path("open-data/data"), help="Ruta a open-data/data de StatsBomb.")
     parser.add_argument("--tm-path", type=Path, default=Path("transfermarkt_data"), help="Ruta a CSVs de Transfermarkt.")
-    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v11_output"), help="Carpeta de salida.")
+    parser.add_argument("--output-dir", type=Path, default=Path("scouting_v12_output"), help="Carpeta de salida.")
     parser.add_argument("--download-data", action="store_true", help="Descarga StatsBomb open-data y Transfermarkt via Kaggle.")
-    parser.add_argument("--skip-eda", action="store_true", help="Genera solo CSV, sin reportes HTML.")
-    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v11_final.zip.")
+    parser.add_argument(
+        "--skip-report", action="store_true",
+        help="Genera solo CSV, sin reporte HTML de conformidad."
+    )
+    parser.add_argument("--zip", action="store_true", help="Comprime la salida en scouting_v12_final.zip.")
     return parser.parse_args()
 
 
 def main() -> None:
+    t_inicio = time.time()
     args = parse_args()
     if args.download_data:
         download_data(Path("."), args.tm_path)
@@ -2291,24 +1702,25 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
-    print("  PIPELINE DE SCOUTING V11")
+    print("  PIPELINE DE SCOUTING V12")
     print("=" * 60)
 
     print("\n-- BLOQUE 1: Carga Transfermarkt")
-    tm_players, tm_players_match, tm_valuations = cargar_transfermarkt(args.tm_path)
+    tm_players_match, liga_player_ids, tm_valuations = cargar_transfermarkt(args.tm_path)
     print(f"   OK tm_players_match: {len(tm_players_match):,} nombres unicos")
-    print(f"   OK tm_valuations 2014-2017: {len(tm_valuations):,} registros")
+    print(f"   OK tm_valuations {FECHAS_INICIO} a {FECHAS_FIN}: {len(tm_valuations):,} registros")
 
     print("\n-- BLOQUE 2: Procesamiento incremental")
     all_matches, all_lineups, conteo_total = procesar_partidos(args.repo_path, args.output_dir)
     print(f"\n   OK total eventos procesados: {conteo_total:,}")
 
     print("\n-- BLOQUE 3: Matching StatsBomb - Transfermarkt")
-    merge_final = matching_jugadores(all_lineups, tm_players_match)
+    pos_habitual = compute_posicion_habitual(args.output_dir)
+    merge_final = matching_jugadores(all_lineups, tm_players_match, liga_player_ids, pos_habitual)
 
     print("\n-- BLOQUE 4: Dimensiones")
-    _, dim_jugador, dim_valoracion = build_dimensiones(
-        all_matches, all_lineups, merge_final, tm_players, tm_valuations, args.output_dir
+    _, dim_jugador, _ = build_dimensiones(
+        all_matches, all_lineups, merge_final, tm_valuations, args.output_dir
     )
 
     print("\n-- BLOQUE 5: Dimension calendario")
@@ -2317,22 +1729,28 @@ def main() -> None:
     print("\n-- BLOQUE 6: Minutos jugados por partido")
     build_fact_minutes(args.output_dir)
 
-    if not args.skip_eda:
-        generar_reportes_eda(args.output_dir, dim_jugador, dim_valoracion)
+    if not args.skip_report:
+        generar_reporte_conformidad(
+            args.output_dir,
+            dim_jugador,
+            conteo_total,
+            [obj["nombre"] for obj in OBJETIVOS],
+            t_inicio,
+        )
 
     csvs = list(args.output_dir.glob("*.csv"))
     htmls = list(args.output_dir.glob("*.html"))
     total_mb = sum(f.stat().st_size for f in csvs + htmls) / 1024 / 1024
 
     print("\n" + "=" * 60)
-    print("  PIPELINE V11 COMPLETADO")
+    print("  PIPELINE V12 COMPLETADO")
     print("=" * 60)
     print(f"\n  {len(csvs)} archivos CSV en ./{args.output_dir}/")
     print(f"  {len(htmls)} reportes HTML en ./{args.output_dir}/")
     print(f"  Tamano total: {total_mb:.1f} MB")
 
     if args.zip:
-        zip_path = zip_output(args.output_dir, "scouting_v11_final")
+        zip_path = zip_output(args.output_dir, "scouting_v12_final")
         print(f"  ZIP generado: {zip_path}")
 
     print(
@@ -2340,10 +1758,10 @@ def main() -> None:
   ARCHIVOS ESPERADOS:
   - dim_jugador, dim_partido, dim_valoracion, dim_calendario
   - fact_shot, fact_pass, fact_duel, fact_dribble, fact_carry
-  - fact_pressure, fact_interception, fact_clearance
-  - fact_ball_receipt, fact_goalkeeper, fact_foul_committed
-  - fact_foul_won, fact_miscontrol, fact_block
+  - fact_pressure, fact_interception
+  - fact_ball_receipt, fact_miscontrol
   - fact_minutes  [minutos jugados por jugador x partido]
+  - 1 reporte HTML de conformidad
 
   POWER BI:
   - Importar CSV con separador ';' y decimal ','
