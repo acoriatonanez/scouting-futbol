@@ -1,157 +1,165 @@
-# ⚽ Sistema de Scouting de Fútbol
-### Identificación de jugadores de alto rendimiento y bajo costo para un club de filosofía cruyffista
+# ⚽ Football Scouting System
+### Identifying high-performance, low-cost players for a Cruyffist-philosophy club
 
-## 🎯 Problema de negocio
-
-Un club recién ascendido a la Primera División española necesita reforzar su plantilla con jugadores de **alto rendimiento y bajo costo de mercado**, respetando una filosofía de juego **cruyffista**: posesión, presión alta y construcción desde atrás.
-
-El sistema responde tres preguntas concretas:
-- **¿Qué se analiza?** Acciones individuales reales en cancha (pases, tiros, duelos, presiones, conducciones) cruzadas con valor de mercado histórico.
-- **¿Para quién?** La dirección deportiva y el cuerpo técnico — un decisor que necesita una herramienta de descubrimiento rápido, no un reporte estático.
-- **¿Qué decisiones habilita?** Priorizar candidatos por posición, descartar perfiles que no encajan en el estilo, y detectar oportunidades de mercado.
+[![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Power BI](https://img.shields.io/badge/Power%20BI-Dashboard-yellow?logo=powerbi)](https://powerbi.microsoft.com/)
+[![StatsBomb](https://img.shields.io/badge/Data-StatsBomb%20Open%20Data-red)](https://github.com/statsbomb/open-data)
+[![Transfermarkt](https://img.shields.io/badge/Data-Transfermarkt%20via%20Kaggle-green)](https://www.kaggle.com/datasets/davidcariboo/player-scores)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 ---
 
-## 🗃️ Fuentes de datos
+## 🎯 Business Problem
 
-| Fuente | Descripción | Acceso |
+A newly promoted Spanish First Division club needs to strengthen its squad with **high-performance, low-market-value players**, while staying true to a **Cruyffist playing philosophy**: possession, high press, and build-from-the-back.
+
+The system answers three concrete questions:
+- **What is analyzed?** Real on-pitch individual actions (passes, shots, duels, pressures, carries) crossed with historical market value.
+- **For whom?** Sporting directors and coaching staff — decision-makers who need a fast discovery tool, not a static report.
+- **What decisions does it enable?** Prioritize candidates by position, filter out profiles that don't fit the style, and detect market opportunities.
+
+---
+
+## 🗃️ Data Sources
+
+| Source | Description | Access |
 |---|---|---|
-| **StatsBomb Open Data** | Eventos partido a partido en JSON — cada acción con coordenadas, timestamp y atributos por tipo | `statsbombpy` / repo clonado |
-| **Transfermarkt via Kaggle** | Posición, altura, pie dominante e **historial de valoraciones fechadas** por jugador | API Kaggle (`davidcariboo/player-scores`) |
+| **StatsBomb Open Data** | Match-by-match events in JSON — each action with coordinates, timestamp and type-specific attributes | `statsbombpy` / cloned repo |
+| **Transfermarkt via Kaggle** | Position, height, dominant foot and **dated market valuation history** per player | Kaggle API (`davidcariboo/player-scores`) |
 
-> El cruce de ambas fuentes mediante **fuzzy matching** (token_set_ratio + bonus de número de camiseta) es el núcleo técnico del pipeline.
+> Joining both sources via **fuzzy matching** (token_set_ratio + jersey number bonus) is the core technical challenge of the pipeline.
 
 ---
 
-## 🏗️ Arquitectura del pipeline
+## 🏗️ Pipeline Architecture
 
-El pipeline ETL sigue un modelo **estrella** con 4 dimensiones y hasta 14 tablas de hechos:
+The ETL pipeline follows a **star schema** with 4 dimensions and up to 14 fact tables:
 
 ```
 StatsBomb JSON  ──┐
-                  ├──► ETL Python ──► Star Schema CSV ──► Power BI Dashboard
+                  ├──► Python ETL ──► Star Schema CSV ──► Power BI Dashboard
 Transfermarkt  ───┘
 ```
 
-**Dimensiones:**
-- `dim_jugador` — perfil, posición habitual, equipo
-- `dim_partido` — liga, temporada, fecha
-- `dim_valoracion` — pico de valor de mercado en el período analizado
-- `dim_calendario` — jerarquía temporal
+**Dimensions:**
+- `dim_jugador` — player profile, habitual position, team
+- `dim_partido` — league, season, date
+- `dim_valoracion` — peak market value within the analyzed period
+- `dim_calendario` — time hierarchy
 
-**Facts principales:**
+**Main Facts:**
 `fact_pass` · `fact_shot` · `fact_duel` · `fact_dribble` · `fact_carry` · `fact_pressure` · `fact_interception` · `fact_clearance` · `fact_foul` · `fact_block` · `fact_ball_receipt` · `fact_miscontrol` · `fact_goalkeeper` · `fact_minutes`
 
 ---
 
-## 📊 Cobertura de datos
+## 📊 Data Coverage
 
-| Liga | Temporadas | Partidos aprox. |
+| League | Seasons | Approx. Matches |
 |---|---|---|
-| La Liga (España) | 2014/15 · 2015/16 · 2016/17 · 2017/18 · 2018/19 · 2019/20 | ~2.280 |
+| La Liga (Spain) | 2014/15 · 2015/16 · 2016/17 · 2017/18 · 2018/19 · 2019/20 | ~2,280 |
 
-> Se excluye la temporada 2020/21 por distorsión COVID. Otras ligas europeas se descartaron por cobertura insuficiente en StatsBomb (una sola temporada disponible).
+> The 2020/21 season is excluded due to COVID distortion. Other European leagues were dropped due to insufficient StatsBomb coverage (only one season available).
 
 ---
 
-## 🧠 KPIs y filosofía de evaluación
+## 🧠 KPIs and Evaluation Philosophy
 
-Cada posición tiene un perfil cruyffista con métricas ponderadas:
+Each position has a Cruyffist profile with weighted metrics:
 
-| Posición | Foco principal |
+| Position | Main Focus |
 |---|---|
-| **9 falso / Delantero** | xG, presión alta, movilidad entre líneas |
-| **Mediocampista** | Pases progresivos, conducciones, acciones bajo presión |
-| **Defensor central** | Intercepciones en campo rival, progresión desde el fondo |
-| **Lateral** | Duelos 1v1, conducciones hacia el centro, pases al interior |
+| **False 9 / Forward** | xG, high press, movement between lines |
+| **Midfielder** | Progressive passes, carries, actions under pressure |
+| **Centre-back** | Interceptions in the opponent's half, build-up from the back |
+| **Full-back** | 1v1 duels, inside carries, passes into the box |
 
-Los percentiles **P50 / P75 / P90** por posición son el umbral de corte para el dashboard.
-
----
-
-## 📈 Dashboard Power BI
-
-El tablero tiene 3 páginas:
-
-1. **Selector de posición** — filtro unificado por perfil cruyffista
-2. **Perfil de jugador** — radar de métricas + heatmap interactivo con slicer de tipo de acción
-3. **Ranking de oportunidades** — jugadores ordenados por score compuesto rendimiento/valor
-
-El heatmap (`fact_heatmap_jugador`) se construye como tabla calculada en **DAX** usando los 8 tipos de eventos que retienen coordenadas `location_x` / `location_y`.
+**P50 / P75 / P90** percentiles by position are the threshold for dashboard filtering.
 
 ---
 
-## 🗂️ Evolución del proyecto
+## 📈 Power BI Dashboard
 
-Este repositorio documenta la evolución completa del sistema — cada commit es una versión funcional:
+The dashboard has 3 pages:
 
-| Versión | Hito principal |
+1. **Position Selector** — unified filter by Cruyffist profile
+2. **Player Profile** — metrics radar + interactive heatmap with action-type slicer
+3. **Opportunity Ranking** — players sorted by composite performance/value score
+
+The heatmap (`fact_heatmap_jugador`) is built as a calculated table in **DAX** using the 8 event types that retain `location_x` / `location_y` coordinates.
+
+---
+
+## 🗂️ Project Evolution
+
+This repository documents the full evolution of the system — each commit is a working version:
+
+| Version | Main milestone |
 |---|---|
-| v1 | Extracción monolítica StatsBomb — 4 temporadas, 5 tipos de evento, CSV master |
-| v2 | Primer star schema — 6 CSVs (2 dims + 4 facts) + tabla resumen por jugador |
-| v3 | ETL completo — 18 CSV, 4 dims, 13 facts, 3 reportes EDA por perfil cruyffista |
-| v4 | EDA filosófico cruyffista — 4 perfiles + validación cruzada camiseta StatsBomb↔TM |
-| v4.3 | Deduplicación en dos criterios — exacto primero, fuzzy de desempate con bonus camiseta |
-| v5 | Pipeline ejecutable sin Colab — argparse, coordenadas x/y preservadas, booleanos robustos |
-| v7 | Scatter interactivo JS + EDA orientado a umbrales P50/P75/P90 para criterios DAX |
-| v9 | `fact_minutes` nuevo, EDA pedagógico reordenado, flags 0/1 canónicos por fact |
-| v10 | Schema rectangular canónico por fact — CSV sin columnas desalineadas |
-| v11 | Valoraciones históricas Transfermarkt — pico de mercado en período analizado 2014-2017 |
-| v12 | **6 temporadas La Liga 2014-2020, esquema reducido Power BI, reporte de conformidad único** |
+| v1 | Monolithic StatsBomb extraction — 4 seasons, 5 event types, master CSV |
+| v2 | First star schema — 6 CSVs (2 dims + 4 facts) + per-player summary table |
+| v3 | Full ETL — 18 CSVs, 4 dims, 13 facts, 3 EDA reports by Cruyffist profile |
+| v4 | Cruyffist philosophical EDA — 4 profiles + cross-validation StatsBomb↔TM jersey number |
+| v4.3 | Two-criteria deduplication — exact match first, fuzzy tiebreak with jersey bonus |
+| v5 | Colab-free executable pipeline — argparse, preserved x/y coordinates, robust booleans |
+| v7 | Interactive JS scatter + EDA oriented to P50/P75/P90 thresholds for DAX criteria |
+| v9 | New `fact_minutes` table, reordered pedagogical EDA, canonical 0/1 flags per fact |
+| v10 | Canonical rectangular schema per fact — no more misaligned CSV columns |
+| v11 | Historical Transfermarkt valuations — peak market value within 2014-2017 period |
+| v12 | **6 La Liga seasons 2014-2020, reduced Power BI schema, single conformity report** |
 
 ---
 
-## 🚀 Cómo ejecutar
+## 🚀 How to Run
 
-### Requisitos
+### Requirements
 ```bash
 pip install statsbombpy rapidfuzz pandas numpy
 ```
 
-### Datos de Transfermarkt
+### Transfermarkt Data
 ```bash
 pip install kaggle
-export KAGGLE_API_TOKEN="tu_token_aqui"
+export KAGGLE_API_TOKEN="your_token_here"
 kaggle datasets download -d davidcariboo/player-scores --unzip -p transfermarkt_data/
 ```
 
-### Ejecutar el pipeline
+### Run the Pipeline
 ```bash
-# Clonar datos StatsBomb
+# Clone StatsBomb data
 git clone https://github.com/statsbomb/open-data.git
 
-# Ejecutar pipeline completo
+# Run full pipeline
 python pipeline/scouting_pipeline.py
 
-# O con descarga incluida
+# Or with data download included
 python pipeline/scouting_pipeline.py --download-data
 ```
 
-Los CSV de salida quedan en `output/` listos para conectar con Power BI.
+Output CSVs are saved to `output/`, ready to connect with Power BI.
 
 ---
 
-## 📁 Estructura del repositorio
+## 📁 Repository Structure
 
 ```
 scouting-futbol/
 ├── pipeline/
-│   ├── scouting_pipeline.py      ← pipeline activo (v12)
-│   ├── scouting_pipeline_v1.py   ← historia del proyecto
+│   ├── scouting_pipeline.py      ← active pipeline (v12)
+│   ├── scouting_pipeline_v1.py   ← project history
 │   ├── ...
 │   └── scouting_pipeline_v12.py
-├── output/                        ← CSVs generados (ignorados por .gitignore)
+├── output/                        ← generated CSVs (ignored by .gitignore)
 ├── .gitignore
 └── README.md
 ```
 
 ---
 
-## 👤 Autor
+## 👤 Author
 
-**Andrés Jano Coriatonanez**
-Trabajo Final Integrador — Curso de Data Analytics · ICARO / FCEFyN UNC · 2025
+**Andrés Coria**
+Final Integration Project — Data Analytics Course · ICARO / FCEFyN UNC · 2025
 
 ---
 
-*Datos de StatsBomb utilizados bajo licencia [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Datos de Transfermarkt vía Kaggle bajo términos del dataset original.*
+*StatsBomb data used under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) license. Transfermarkt data via Kaggle under the original dataset terms.*
