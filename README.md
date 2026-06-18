@@ -44,11 +44,11 @@ Transfermarkt  ───┘
 **Dimensions:**
 - `dim_jugador` — player profile, habitual position, team
 - `dim_partido` — league, season, date
-- `dim_valoracion` — peak market value within the analyzed period
+- `dim_valoracion` — full market valuation history within the analyzed period (one row per Transfermarkt snapshot)
 - `dim_calendario` — time hierarchy
 
 **Main Facts:**
-`fact_pass` · `fact_shot` · `fact_duel` · `fact_dribble` · `fact_carry` · `fact_pressure` · `fact_interception` · `fact_clearance` · `fact_foul` · `fact_block` · `fact_ball_receipt` · `fact_miscontrol` · `fact_goalkeeper` · `fact_minutes`
+`fact_pass` · `fact_shot` · `fact_duel` · `fact_dribble` · `fact_carry` · `fact_pressure` · `fact_interception` · `fact_clearance` · `fact_foul` · `fact_block` · `fact_ball_receipt` · `fact_miscontrol` · `fact_minutes`
 
 ---
 
@@ -105,7 +105,7 @@ This repository documents the full evolution of the system — each commit is a 
 | v9 | New `fact_minutes` table, reordered pedagogical EDA, canonical 0/1 flags per fact |
 | v10 | Canonical rectangular schema per fact — no more misaligned CSV columns |
 | v11 | Historical Transfermarkt valuations — peak market value within 2014-2017 period |
-| v12 | **6 La Liga seasons 2014-2020, reduced Power BI schema, single conformity report** |
+| v12 | **6 La Liga seasons 2014-2020, reduced Power BI schema, single conformity report, full valuation timeline** |
 
 ---
 
@@ -124,18 +124,18 @@ kaggle datasets download -d davidcariboo/player-scores --unzip -p transfermarkt_
 ```
 
 ### Run the Pipeline
-```bash
-# Clone StatsBomb data
-git clone https://github.com/statsbomb/open-data.git
+```powershell
+# Run with explicit paths (recommended)
+python pipeline/scouting_pipeline_v12.py `
+  --repo-path "D:\datos\futbol\statsbomb\data" `
+  --tm-path "D:\datos\futbol\transfermarkt" `
+  --output-dir "output\scouting_v12_output"
 
-# Run full pipeline
-python pipeline/scouting_pipeline.py
-
-# Or with data download included
-python pipeline/scouting_pipeline.py --download-data
+# Or with automatic data download
+python pipeline/scouting_pipeline_v12.py --download-data
 ```
 
-Output CSVs are saved to `output/`, ready to connect with Power BI.
+Output CSVs and `reporte_conformidad.html` are saved to `--output-dir`, ready to connect with Power BI.
 
 ---
 
