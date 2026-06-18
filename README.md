@@ -124,14 +124,14 @@ kaggle datasets download -d davidcariboo/player-scores --unzip -p transfermarkt_
 ```
 
 ### Run the Pipeline
-```powershell
-# Run with explicit paths (recommended)
-python pipeline/scouting_pipeline_v12.py `
-  --repo-path "D:\datos\futbol\statsbomb\data" `
-  --tm-path "D:\datos\futbol\transfermarkt" `
-  --output-dir "output\scouting_v12_output"
+```bash
+# Run with explicit paths pointing to your local data folders
+python pipeline/scouting_pipeline_v12.py \
+  --repo-path "/path/to/statsbomb/open-data/data" \
+  --tm-path "/path/to/transfermarkt" \
+  --output-dir "output/scouting_v12_output"
 
-# Or with automatic data download
+# Or let the pipeline download everything automatically
 python pipeline/scouting_pipeline_v12.py --download-data
 ```
 
