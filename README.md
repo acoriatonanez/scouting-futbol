@@ -27,7 +27,7 @@ The system answers three concrete questions:
 | **StatsBomb Open Data** | Match-by-match events in JSON — each action with coordinates, timestamp and type-specific attributes | `statsbombpy` / cloned repo |
 | **Transfermarkt via Kaggle** | Position, height, dominant foot and **dated market valuation history** per player | Kaggle API (`davidcariboo/player-scores`) |
 
-> Joining both sources via **fuzzy matching** (token_set_ratio + jersey number bonus) is the core technical challenge of the pipeline.
+> Joining both sources via **composite-score matching** (fuzzy name similarity + country blocking + position similarity) is the core technical challenge of the pipeline.
 
 ---
 
@@ -56,7 +56,7 @@ Transfermarkt  ───┘
 
 | League | Seasons | Approx. Matches |
 |---|---|---|
-| La Liga (Spain) | 2014/15 · 2015/16 · 2016/17 · 2017/18 · 2018/19 · 2019/20 | ~2,280 |
+| La Liga (Spain) | 2014/15 · 2015/16 · 2016/17 · 2017/18 · 2018/19 · 2019/20 | 555 |
 
 > The 2020/21 season is excluded due to COVID distortion. Other European leagues were dropped due to insufficient StatsBomb coverage (only one season available).
 
@@ -64,28 +64,28 @@ Transfermarkt  ───┘
 
 ## 🧠 KPIs and Evaluation Philosophy
 
-Each position has a Cruyffist profile with weighted metrics:
+Each position has a Cruyffist profile with **weighted DAX scores** (69 measures total). Players with fewer than 450 minutes are automatically excluded:
 
-| Position | Main Focus |
-|---|---|
-| **False 9 / Forward** | xG, high press, movement between lines |
-| **Midfielder** | Progressive passes, carries, actions under pressure |
-| **Centre-back** | Interceptions in the opponent's half, build-up from the back |
-| **Full-back** | 1v1 duels, inside carries, passes into the box |
+| Profile | Metrics (weight) | DAX Score |
+|---|---|---|
+| **Forward** | Through-balls p90 (30%) · High-press actions p90 (30%) · npxG p90 (20%) · Receptions in final third p90 (20%) | `Score Delantero` |
+| **Midfielder** | Progressive passes p90 (25%) · Prog. pass ratio (25%) · Progressive carries p90 (20%) · Passes under pressure p90 (20%) · Miscontrol p90 (10%, inverted) | `Score Mediocampista` |
+| **Centre-back** | Interceptions in opp. half p90 (30%) · Progressive passes from own half p90 (30%) · Duels won in high zone p90 (20%) · Progressive carries in midfield p90 (20%) | `Score Defensor` |
+| **Full-back** | Defensive duels won p90 (30%) · Inside carries p90 (30%) · Inward passes p90 (30%) · Wing presses p90 (10%) | `Score Lateral` |
 
-**P50 / P75 / P90** percentiles by position are the threshold for dashboard filtering.
+Each metric is also exposed as a **percentile** (`Pct *`) within its positional cohort for radar-chart visualization.
 
 ---
 
 ## 📈 Power BI Dashboard
 
-The dashboard has 3 pages:
+26 tables · 69 DAX measures · 26 relationships · 2 Python visuals · 3 pages:
 
-1. **Position Selector** — unified filter by Cruyffist profile
-2. **Player Profile** — metrics radar + interactive heatmap with action-type slicer
-3. **Opportunity Ranking** — players sorted by composite performance/value score
+1. **Jugadores** — master table with unified score and score-per-million, filterable by position (`dim_posicion`), market value and age slicers
+2. **Detalle** — individual player card with Python radar chart (percentiles by position) + Python heatmap (8 action types via `fact_heatmap_jugador`), club, country, height, age, minutes played, and 5 dynamic metric cards
+3. **Evolución Valor** — market value timeline and minutes played per season powered by `dim_valoracion` (full Transfermarkt history), with club breakdown table
 
-The heatmap (`fact_heatmap_jugador`) is built as a calculated table in **DAX** using the 8 event types that retain `location_x` / `location_y` coordinates.
+`fact_heatmap_jugador` is a **DAX calculated table** (`UNION` of `SELECTCOLUMNS` over 8 fact tables) — not a CSV from the pipeline. Metric slicers use two auxiliary DAX tables (`dim_metricas_1`, `dim_metricas_2`) that feed `SWITCH`-based dynamic measures per position.
 
 ---
 
@@ -144,10 +144,10 @@ Output CSVs and `reporte_conformidad.html` are saved to `--output-dir`, ready to
 ```
 scouting-futbol/
 ├── pipeline/
-│   ├── scouting_pipeline.py      ← active pipeline (v12)
+│   ├── scouting_pipeline_v12.py  ← active pipeline
 │   ├── scouting_pipeline_v1.py   ← project history
-│   ├── ...
-│   └── scouting_pipeline_v12.py
+│   └── ...
+├── pbix/                          ← Power BI dashboard + radiography
 ├── output/                        ← generated CSVs (ignored by .gitignore)
 ├── .gitignore
 └── README.md
