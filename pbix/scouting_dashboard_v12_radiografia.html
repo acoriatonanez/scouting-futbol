@@ -1,0 +1,2961 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Radiografía PBIX — scouting_dashboard_v12.pbix</title>
+<style>
+:root {
+  --bg:#f7fafc; --surface:#fff; --border:#e2e8f0;
+  --text:#2d3748; --muted:#718096; --accent:#2b6cb0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+header{background:linear-gradient(135deg,#1a365d,#2b6cb0);color:#fff;padding:2rem}
+header h1{font-size:1.6rem}
+header p{opacity:.8;font-size:.9rem;margin-top:.3rem}
+nav{background:#2d3748;display:flex;flex-wrap:wrap;gap:2px;padding:.5rem}
+nav a{color:#e2e8f0;text-decoration:none;padding:.4rem .8rem;border-radius:4px;font-size:.85rem}
+nav a:hover{background:#4a5568}
+main{max-width:1400px;margin:auto;padding:1.5rem}
+section{margin-bottom:2.5rem}
+h2{font-size:1.25rem;color:var(--accent);border-bottom:2px solid var(--border);padding-bottom:.4rem;margin-bottom:1rem}
+h4{margin:.8rem 0 .4rem;color:#4a5568}
+.cards{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.5rem;min-width:130px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card-icon{font-size:1.6rem}
+.card-val{font-size:2rem;font-weight:700;color:var(--accent)}
+.card-label{font-size:.8rem;color:var(--muted);margin-top:.2rem}
+table{width:100%;border-collapse:collapse;font-size:.88rem;background:var(--surface)}
+th{background:#ebf4ff;color:#2c5282;text-align:left;padding:.5rem .7rem;border-bottom:2px solid #bee3f8}
+td{padding:.45rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+tr:hover td{background:#f0f4ff}
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.75rem;color:#fff;margin:1px}
+details{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:.6rem}
+details.bloque summary{
+  padding:.7rem 1rem;cursor:pointer;list-style:none;
+  color:#fff;border-radius:6px;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap
+}
+details[open].bloque summary{border-radius:6px 6px 0 0}
+details summary::-webkit-details-marker{display:none}
+.summary-counts{margin-left:auto;font-size:.8rem;opacity:.85}
+.body{padding:1rem;overflow-x:auto}
+code{background:#edf2f7;padding:.1rem .3rem;border-radius:3px;font-size:.85em}
+pre{background:#1a202c;color:#e2e8f0;padding:1rem;border-radius:6px;overflow:auto;font-size:12px}
+.mq-code{background:#1a202c;color:#b5f5ec;padding:1rem;border-radius:6px;overflow:auto;font-size:12px;white-space:pre-wrap}
+footer{text-align:center;color:var(--muted);font-size:.8rem;padding:2rem}
+@media(max-width:600px){.cards{gap:.5rem}.card{min-width:100px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔬 Radiografía Power BI</h1>
+  <p>📁 scouting_dashboard_v12.pbix &nbsp;·&nbsp; Generado el 19/06/2026 15:58</p>
+</header>
+<nav>
+  <a href="#resumen">📊 Resumen</a>
+  <a href="#tablas">🗂️ Tablas & Medidas</a>
+  <a href="#relaciones">🔗 Relaciones</a>
+  <a href="#reporte">📄 Reporte</a>
+  <a href="#uso">🔍 Uso de campos</a>
+  <a href="#visuales">👁️ Tipos de visuales</a>
+  <a href="#roles">🔒 Seguridad RLS</a>
+  <a href="#auxiliares">🔧 Tablas auxiliares</a>
+  <a href="#archivos">📦 Archivos internos</a>
+</nav>
+<main>
+<section id="resumen">
+  <h2>📊 Resumen ejecutivo</h2>
+  <div class="cards">
+        <div class="card">
+          <div class="card-icon">🗂️</div>
+          <div class="card-val">26</div>
+          <div class="card-label">Tablas</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📐</div>
+          <div class="card-val">69</div>
+          <div class="card-label">Medidas DAX</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <div class="card-val">215</div>
+          <div class="card-label">Columnas</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔧</div>
+          <div class="card-val">26</div>
+          <div class="card-label">M Queries</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔗</div>
+          <div class="card-val">26</div>
+          <div class="card-label">Relaciones</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📄</div>
+          <div class="card-val">3</div>
+          <div class="card-label">Páginas</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">👁️</div>
+          <div class="card-val">31</div>
+          <div class="card-label">Visuales</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🐍</div>
+          <div class="card-val">2</div>
+          <div class="card-label">Visuals Python</div>
+        </div></div>
+</section>
+<section id="tablas">
+  <h2>🗂️ Tablas, columnas y medidas</h2>
+  
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_heatmap_jugador</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              6 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_heatmap_jugador</code>
+                <span class="badge" style="background:#2d6a4f">calculated</span>
+              </summary>
+              <div class="mq-code">
+UNION(
+    SELECTCOLUMNS(fact_ball_receipt, &quot;location_x&quot;, fact_ball_receipt[location_x], &quot;location_y&quot;, fact_ball_receipt[location_y], &quot;player_id&quot;, fact_ball_receipt[player_id], &quot;match_id&quot;, fact_ball_receipt[match_id], &quot;tipo&quot;, &quot;recepcion&quot;),
+    SELECTCOLUMNS(fact_pressure,     &quot;location_x&quot;, fact_pressure[location_x],     &quot;location_y&quot;, fact_pressure[location_y],     &quot;player_id&quot;, fact_pressure[player_id],     &quot;match_id&quot;, fact_pressure[match_id],     &quot;tipo&quot;, &quot;presion&quot;),
+    SELECTCOLUMNS(fact_shot,         &quot;location_x&quot;, fact_shot[location_x],         &quot;location_y&quot;, fact_shot[location_y],         &quot;player_id&quot;, fact_shot[player_id],         &quot;match_id&quot;, fact_shot[match_id],         &quot;tipo&quot;, &quot;remate&quot;),
+    SELECTCOLUMNS(fact_dribble,      &quot;location_x&quot;, fact_dribble[location_x],      &quot;location_y&quot;, fact_dribble[location_y],      &quot;player_id&quot;, fact_dribble[player_id],      &quot;match_id&quot;, fact_dribble[match_id],      &quot;tipo&quot;, &quot;dribble&quot;),
+    SELECTCOLUMNS(fact_carry,        &quot;location_x&quot;, fact_carry[location_x],        &quot;location_y&quot;, fact_carry[location_y],        &quot;player_id&quot;, fact_carry[player_id],        &quot;match_id&quot;, fact_carry[match_id],        &quot;tipo&quot;, &quot;conduccion&quot;),
+    SELECTCOLUMNS(fact_pass,         &quot;location_x&quot;, fact_pass[location_x],         &quot;location_y&quot;, fact_pass[location_y],         &quot;player_id&quot;, fact_pass[player_id],         &quot;match_id&quot;, fact_pass[match_id],         &quot;tipo&quot;, &quot;pase&quot;),
+    SELECTCOLUMNS(fact_duel,         &quot;location_x&quot;, fact_duel[location_x],         &quot;location_y&quot;, fact_duel[location_y],         &quot;player_id&quot;, fact_duel[player_id],         &quot;match_id&quot;, fact_duel[match_id],         &quot;tipo&quot;, &quot;duelo&quot;),
+    SELECTCOLUMNS(fact_interception, &quot;location_x&quot;, fact_interception[location_x], &quot;location_y&quot;, fact_interception[location_y], &quot;player_id&quot;, fact_interception[player_id], &quot;match_id&quot;, fact_interception[match_id], &quot;tipo&quot;, &quot;intercepcion&quot;)
+)</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>tipo  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 medidas</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              1 cols · 8 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">medidas</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText(&quot;i44FAA==&quot;, BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Columna1 = _t]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(Origen,{{&quot;Columna1&quot;, type text}}),
+    #&quot;Columnas quitadas&quot; = Table.RemoveColumns(#&quot;Tipo cambiado&quot;,{&quot;Columna1&quot;})
+in
+    #&quot;Columnas quitadas&quot;</div>
+            </details>
+            <h4>📐 Medidas DAX</h4><table><thead><tr><th>Nombre</th><th>Expresión DAX</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td><strong>Minutos Jugados</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>SUM(fact_minutes[minutos_jugados])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Total Pases</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(COUNTROWS(fact_pass))</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Valor de Mercado Actual</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    MAX(dim_valoracion[market_value_in_eur]),<br>    FILTER(<br>        dim_valoracion,<br>        dim_valoracion[date] = CALCULATE(MAX(dim_valoracion[date]))<br>    )<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>score_d por millón de eur</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Score Delantero], [Valor de Mercado Actual] / 1000000)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>score_m por millón de eur</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Score Mediocampista], [Valor de Mercado Actual] / 1000000)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>score_def por millón de eur</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Score Defensor], [Valor de Mercado Actual] / 1000000)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>score_lat por millón de eur</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Score Lateral], [Valor de Mercado Actual] / 1000000)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Valor Dinámico Mediana</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030">50</td>
+              <td>0</td>
+            </tr></tbody></table>
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 medidas_del</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              1 cols · 17 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">medidas_del</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText(&quot;i44FAA==&quot;, BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Columna1 = _t]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(Origen,{{&quot;Columna1&quot;, type text}}),
+    #&quot;Columnas quitadas&quot; = Table.RemoveColumns(#&quot;Tipo cambiado&quot;,{&quot;Columna1&quot;})
+in
+    #&quot;Columnas quitadas&quot;</div>
+            </details>
+            <h4>📐 Medidas DAX</h4><table><thead><tr><th>Nombre</th><th>Expresión DAX</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td><strong>xG Sin Penal</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    SUM(fact_shot[shot_statsbomb_xg]),<br>    fact_shot[shot_type] &lt;&gt; &quot;Penalty&quot;<br>)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>xG Sin Penal por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([xG Sin Penal] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Presiones Ultimo Tercio</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(COUNTROWS(fact_pressure), fact_pressure[location_x] &gt; 80)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Presiones por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Presiones Ultimo Tercio] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Recepciones Campo Rival</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(COUNTROWS(fact_ball_receipt), fact_ball_receipt[location_x] &gt; 80)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Recepciones por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Recepciones Campo Rival] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Total Desmarques Ruptura</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR NombreJugador = SELECTEDVALUE(dim_jugador[player])<br>RETURN<br>IF(<br>    ISBLANK(NombreJugador),<br>    BLANK(),<br>    COUNTROWS(<br>        FILTER(<br>            ALL(fact_pass),<br>            fact_pass[es_desmarque_ruptura] = TRUE()<br>            &amp;&amp; fact_pass[pass_recipient] = NombreJugador<br>        )<br>    )<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Desmarques por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Total Desmarques Ruptura] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Dribbles</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(COUNTROWS(fact_dribble), fact_dribble[es_dribble_exitoso] = 1)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Dribbles por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Dribbles] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Score Delantero</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>IF(<br>    [Minutos Jugados] &lt; 450,<br>    BLANK(),<br>    VAR Total = CALCULATE(DISTINCTCOUNT(dim_jugador[player_id]), ALL(dim_jugador))<br>    VAR RankDesmarques  = DIVIDE(RANKX(ALL(dim_jugador), [Desmarques por 90],, ASC, Dense), Total)<br>    VAR RankPresiones   = DIVIDE(RANKX(ALL(dim_jugador), [Presiones por 90],, ASC, Dense), Total)<br>    VAR RankXG          = DIVIDE(RANKX(ALL(dim_jugador), [xG Sin Penal por 90],, ASC, Dense), Total)<br>    VAR RankRecepciones = DIVIDE(RANKX(ALL(dim_jugador), [Recepciones por 90],, ASC, Dense), Total)<br>    RETURN<br>        RankDesmarques   * 0.30 +<br>        RankPresiones    * 0.30 +<br>        RankXG           * 0.20 +<br>        RankRecepciones  * 0.20<br>)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Desmarques</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Delantero]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Desmarques por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Presiones</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Delantero]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Presiones por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct xG</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Delantero]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [xG Sin Penal por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Recepciones</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Delantero]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Recepciones por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Dribbles</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Delantero]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Dribbles por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Valor Dinámico Jugador</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>SWITCH(<br>    SELECTEDVALUE(dim_metricas_1[Delanteros]),<br>    &quot;Desmarques p90&quot;,   [Pct Desmarques],<br>    &quot;Presiones p90&quot;,    [Pct Presiones],<br>    &quot;xG Sin Penal p90&quot;, [Pct xG],<br>    &quot;Recepciones p90&quot;,  [Pct Recepciones],<br>    &quot;Dribbles p90&quot;,     [Pct Dribbles]<br>)</td>
+              <td></td>
+            </tr></tbody></table>
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 medidas_mid</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              1 cols · 16 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">medidas_mid</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText(&quot;i44FAA==&quot;, BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Columna1 = _t]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(Origen,{{&quot;Columna1&quot;, type text}}),
+    #&quot;Columnas quitadas&quot; = Table.RemoveColumns(#&quot;Tipo cambiado&quot;,{&quot;Columna1&quot;})
+in
+    #&quot;Columnas quitadas&quot;</div>
+            </details>
+            <h4>📐 Medidas DAX</h4><table><thead><tr><th>Nombre</th><th>Expresión DAX</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td><strong>Pases Progresivos</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_pass),<br>    fact_pass[es_pase_completo] = 1,<br>    fact_pass[pass_end_x] &gt; fact_pass[location_x] + 8<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Pases Prog por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Pases Progresivos] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Ratio Pases Prog</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Pases Progresivos], [Total Pases])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Conducciones Progresivas</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_carry),<br>    fact_carry[carry_end_x] &gt; fact_carry[location_x] + 5<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Conducciones Prog por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Conducciones Progresivas] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pases Exitosos Bajo Presion</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_pass),<br>    fact_pass[es_pase_completo] = 1,<br>    fact_pass[under_pressure] = 1<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Pases Bajo Presion por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Pases Exitosos Bajo Presion] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Perdidas de Balon</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>COUNTROWS(fact_miscontrol)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Perdidas por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Perdidas de Balon] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Score Mediocampista</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>IF(<br>    [Minutos Jugados] &lt; 450,<br>    BLANK(),<br>    VAR Total = CALCULATE(DISTINCTCOUNT(dim_jugador[player_id]), ALL(dim_jugador))<br>    VAR RankPasesProg   = DIVIDE(RANKX(ALL(dim_jugador), [Pases Prog por 90],, ASC, Dense), Total)<br>    VAR RankRatioPases  = DIVIDE(RANKX(ALL(dim_jugador), [Ratio Pases Prog],, ASC, Dense), Total)<br>    VAR RankCondProg    = DIVIDE(RANKX(ALL(dim_jugador), [Conducciones Prog por 90],, ASC, Dense), Total)<br>    VAR RankBajoPresion = DIVIDE(RANKX(ALL(dim_jugador), [Pases Bajo Presion por 90],, ASC, Dense), Total)<br>    VAR RankPerdidas    = DIVIDE(RANKX(ALL(dim_jugador), [Perdidas por 90],, DESC, Dense), Total)<br>    RETURN<br>        RankPasesProg   * 0.25 +<br>        RankRatioPases  * 0.25 +<br>        RankCondProg    * 0.20 +<br>        RankBajoPresion * 0.20 +<br>        RankPerdidas    * 0.10<br>)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Pases Prog</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Mediocampista]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Pases Prog por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Ratio Pases Prog</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Mediocampista]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Ratio Pases Prog],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Conducciones Prog</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Mediocampista]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Conducciones Prog por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Pases Bajo Presion</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Mediocampista]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Pases Bajo Presion por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Perdidas</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Mediocampista]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Perdidas por 90],, DESC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Valor Dinámico Jugador Mid</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>SWITCH(<br>    SELECTEDVALUE(dim_metricas_1[Mediocampo]),<br>    &quot;Pases Prog p90&quot;,        [Pct Pases Prog],<br>    &quot;Ratio Pases Prog&quot;,      [Pct Ratio Pases Prog],<br>    &quot;Conducciones Prog p90&quot;, [Pct Conducciones Prog],<br>    &quot;Pases Bajo Presion p90&quot;,[Pct Pases Bajo Presion],<br>    &quot;Perdidas p90&quot;,          [Pct Perdidas]<br>)</td>
+              <td></td>
+            </tr></tbody></table>
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 medidas_def</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              1 cols · 14 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">medidas_def</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText(&quot;i44FAA==&quot;, BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Columna1 = _t]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(Origen,{{&quot;Columna1&quot;, type text}}),
+    #&quot;Columnas quitadas&quot; = Table.RemoveColumns(#&quot;Tipo cambiado&quot;,{&quot;Columna1&quot;})
+in
+    #&quot;Columnas quitadas&quot;</div>
+            </details>
+            <h4>📐 Medidas DAX</h4><table><thead><tr><th>Nombre</th><th>Expresión DAX</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td><strong>Duelos Zona Alta</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_duel),<br>    fact_duel[location_x] &gt; 40,<br>    fact_duel[es_duelo_ganado] = 1<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Intercepciones Campo Rival</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(COUNTROWS(fact_interception), fact_interception[location_x] &gt; 60)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Intercepciones CR por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Intercepciones Campo Rival] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pases Prog Desde Atras</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_pass),<br>    fact_pass[es_pase_completo] = 1,<br>    fact_pass[location_x] &lt; 40,<br>    fact_pass[pass_end_x] &gt; fact_pass[location_x] + 15<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Pases Prog Atras por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Pases Prog Desde Atras] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Carrys Progresivos Zona Media</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_carry),<br>    fact_carry[location_x] &gt;= 35,<br>    fact_carry[location_x] &lt;= 65,<br>    fact_carry[carry_end_x] &gt; fact_carry[location_x] + 8<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Carrys Zona Media por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Carrys Progresivos Zona Media] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Score Defensor</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>IF(<br>    [Minutos Jugados] &lt; 450,<br>    BLANK(),<br>    VAR Total = CALCULATE(DISTINCTCOUNT(dim_jugador[player_id]), ALL(dim_jugador))<br>    VAR RankDuelos     = DIVIDE(RANKX(ALL(dim_jugador), [Duelos Zona Alta por 90],, ASC, Dense), Total)<br>    VAR RankIntercep   = DIVIDE(RANKX(ALL(dim_jugador), [Intercepciones CR por 90],, ASC, Dense), Total)<br>    VAR RankPasesAtras = DIVIDE(RANKX(ALL(dim_jugador), [Pases Prog Atras por 90],, ASC, Dense), Total)<br>    VAR RankCarrys     = DIVIDE(RANKX(ALL(dim_jugador), [Carrys Zona Media por 90],, ASC, Dense), Total)<br>    RETURN<br>        RankDuelos     * 0.20 +<br>        RankIntercep   * 0.30 +<br>        RankPasesAtras * 0.30 +<br>        RankCarrys     * 0.20<br>)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Duelos Zona Alta</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Defensor]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Duelos Zona Alta por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Duelos Zona Alta por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Duelos Zona Alta] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Intercepciones CR</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Defensor]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Intercepciones CR por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Pases Prog Atras</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Defensor]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Pases Prog Atras por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Carrys Zona Media</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Defensor]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Carrys Zona Media por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Valor Dinámico Jugador Def</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>SWITCH(<br>    SELECTEDVALUE(dim_metricas_2[Defensivos]),<br>    &quot;Duelos Zona Alta p90&quot;,  [Pct Duelos Zona Alta],<br>    &quot;Intercepciones CR p90&quot;, [Pct Intercepciones CR],<br>    &quot;Pases Prog Atras p90&quot;,  [Pct Pases Prog Atras],<br>    &quot;Carrys Zona Media p90&quot;, [Pct Carrys Zona Media]<br>)</td>
+              <td></td>
+            </tr></tbody></table>
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 medidas_lat</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              1 cols · 14 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">medidas_lat</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText(&quot;i44FAA==&quot;, BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Columna1 = _t]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(Origen,{{&quot;Columna1&quot;, type text}}),
+    #&quot;Columnas quitadas&quot; = Table.RemoveColumns(#&quot;Tipo cambiado&quot;,{&quot;Columna1&quot;})
+in
+    #&quot;Columnas quitadas&quot;</div>
+            </details>
+            <h4>📐 Medidas DAX</h4><table><thead><tr><th>Nombre</th><th>Expresión DAX</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td><strong>Duelos Defensivos Ganados</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(COUNTROWS(fact_duel), fact_duel[es_duelo_ganado] = 1)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Duelos Def por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Duelos Defensivos Ganados] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Conducciones Hacia Centro</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_carry),<br>    OR(<br>        AND(fact_carry[location_y] &lt; 30, fact_carry[carry_end_y] &gt; fact_carry[location_y]),<br>        AND(fact_carry[location_y] &gt; 50, fact_carry[carry_end_y] &lt; fact_carry[location_y])<br>    )<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Conducciones Centro por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Conducciones Hacia Centro] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pases Hacia Adentro</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_pass),<br>    fact_pass[es_pase_completo] = 1,<br>    OR(<br>        AND(fact_pass[location_y] &lt; 25, fact_pass[pass_end_y] &gt; fact_pass[location_y] + 5),<br>        AND(fact_pass[location_y] &gt; 55, fact_pass[pass_end_y] &lt; fact_pass[location_y] - 5)<br>    )<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Pases Adentro por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Pases Hacia Adentro] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Presiones En Banda</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>CALCULATE(<br>    COUNTROWS(fact_pressure),<br>    OR(fact_pressure[location_y] &lt; 20, fact_pressure[location_y] &gt; 60)<br>)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td><strong>Presiones Banda por 90</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>DIVIDE([Presiones En Banda] * 90, [Minutos Jugados])</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Score Lateral</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>IF(<br>    [Minutos Jugados] &lt; 450,<br>    BLANK(),<br>    VAR Total = CALCULATE(DISTINCTCOUNT(dim_jugador[player_id]), ALL(dim_jugador))<br>    VAR RankDuelos     = DIVIDE(RANKX(ALL(dim_jugador), [Duelos Def por 90],, ASC, Dense), Total)<br>    VAR RankCondCentro = DIVIDE(RANKX(ALL(dim_jugador), [Conducciones Centro por 90],, ASC, Dense), Total)<br>    VAR RankPasesAdent = DIVIDE(RANKX(ALL(dim_jugador), [Pases Adentro por 90],, ASC, Dense), Total)<br>    VAR RankPresiones  = DIVIDE(RANKX(ALL(dim_jugador), [Presiones Banda por 90],, ASC, Dense), Total)<br>    RETURN<br>        RankDuelos     * 0.30 +<br>        RankCondCentro * 0.30 +<br>        RankPasesAdent * 0.30 +<br>        RankPresiones  * 0.10<br>)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Duelos Def</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Lateral]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Duelos Def por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Conducciones Centro</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Lateral]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Conducciones Centro por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Pases Adentro</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Lateral]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Pases Adentro por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Pct Presiones Banda</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>VAR Cohorte = FILTER(ALL(dim_jugador), NOT ISBLANK([Score Lateral]))<br>RETURN 100 * DIVIDE(RANKX(Cohorte, [Presiones Banda por 90],, ASC, Dense), COUNTROWS(Cohorte))</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>Valor Dinámico Jugador Lat</strong></td>
+              <td style="font-family:monospace;font-size:12px;color:#c53030"><br>SWITCH(<br>    SELECTEDVALUE(dim_metricas_2[Laterales]),<br>    &quot;Duelos Def p90&quot;,         [Pct Duelos Def],<br>    &quot;Conducciones Centro p90&quot;,[Pct Conducciones Centro],<br>    &quot;Pases Adentro p90&quot;,      [Pct Pases Adentro],<br>    &quot;Presiones Banda p90&quot;,    [Pct Presiones Banda]<br>)</td>
+              <td></td>
+            </tr></tbody></table>
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 dim_jugador</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              17 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">dim_jugador</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\dim_jugador.csv&quot;),[Delimiter=&quot;;&quot;, Columns=15, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;player_id&quot;, Int64.Type}, {&quot;player&quot;, type text}, {&quot;country&quot;, type text}, {&quot;tm_player_id&quot;, Int64.Type}, {&quot;tm_name&quot;, type text}, {&quot;date_of_birth&quot;, type datetime}, {&quot;country_of_citizenship&quot;, type text}, {&quot;sub_position&quot;, type text}, {&quot;foot&quot;, type text}, {&quot;height_in_cm&quot;, Int64.Type}, {&quot;market_value_in_eur&quot;, Int64.Type}, {&quot;fuzzy_score&quot;, type number}, {&quot;metodo_match&quot;, type text}, {&quot;equipo_habitual&quot;, type text}, {&quot;posicion_habitual&quot;, type text}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>country  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>tm_player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>tm_name  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>date_of_birth  </td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>General Date</td>
+            </tr>
+            <tr>
+              <td>country_of_citizenship  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>sub_position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>foot  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>height_in_cm  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>market_value_in_eur  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>fuzzy_score  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>metodo_match  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>equipo_habitual  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>posicion_habitual  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Edad en 2020 <span class="badge" style="background:#c05621">Calculada</span> </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">
+IF(
+    ISBLANK(dim_jugador[date_of_birth]),
+    BLANK(),
+    2020 - YEAR(dim_jugador[date_of_birth])
+)</td>
+              <td>0</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#553c9a">
+            <span>📋 DateTableTemplate_d9a2e886-9150-4f60-97bf-8674314b2d71</span>
+            <span class="badge" style="background:#718096">Oculta</span><span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              8 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">DateTableTemplate_d9a2e886-9150-4f60-97bf-8674314b2d71</code>
+                <span class="badge" style="background:#2d6a4f">calculated</span>
+              </summary>
+              <div class="mq-code">Calendar(Date(2015,1,1), Date(2015,1,1))</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Date  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>General Date</td>
+            </tr>
+            <tr>
+              <td>Año <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">YEAR([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>NroMes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">MONTH([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Mes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">FORMAT([Date], &quot;MMMM&quot;)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>NroTrimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">INT(([NroMes] + 2) / 3)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Trimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">&quot;Trim. &quot; &amp; [NroTrimestre]</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Día <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">DAY([Date])</td>
+              <td>0</td>
+            </tr></tbody></table>
+            <h4>🌲 Jerarquías</h4><p>Jerarquía de fechas</p>
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#553c9a">
+            <span>📋 LocalDateTable_e5597772-8bef-42e2-9c8a-3477167d46e7</span>
+            <span class="badge" style="background:#718096">Oculta</span><span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              8 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">LocalDateTable_e5597772-8bef-42e2-9c8a-3477167d46e7</code>
+                <span class="badge" style="background:#2d6a4f">calculated</span>
+              </summary>
+              <div class="mq-code">Calendar(Date(Year(MIN('dim_jugador'[date_of_birth])), 1, 1), Date(Year(MAX('dim_jugador'[date_of_birth])), 12, 31))</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Date  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>General Date</td>
+            </tr>
+            <tr>
+              <td>Año <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">YEAR([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>NroMes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">MONTH([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Mes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">FORMAT([Date], &quot;MMMM&quot;)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>NroTrimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">INT(([NroMes] + 2) / 3)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Trimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">&quot;Trim. &quot; &amp; [NroTrimestre]</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Día <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">DAY([Date])</td>
+              <td>0</td>
+            </tr></tbody></table>
+            <h4>🌲 Jerarquías</h4><p>Jerarquía de fechas</p>
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 dim_partido</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              17 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">dim_partido</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\dim_partido.csv&quot;),[Delimiter=&quot;;&quot;, Columns=16, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;competition_id&quot;, Int64.Type}, {&quot;competition&quot;, type text}, {&quot;season_id&quot;, Int64.Type}, {&quot;season&quot;, type text}, {&quot;match_date&quot;, type date}, {&quot;kick_off&quot;, type time}, {&quot;match_week&quot;, Int64.Type}, {&quot;home_team_id&quot;, Int64.Type}, {&quot;home_team&quot;, type text}, {&quot;away_team_id&quot;, Int64.Type}, {&quot;away_team&quot;, type text}, {&quot;home_score&quot;, Int64.Type}, {&quot;away_score&quot;, Int64.Type}, {&quot;stadium&quot;, type text}, {&quot;referee&quot;, type text}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>competition_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>competition  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>season_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>season  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_date  </td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>Long Date</td>
+            </tr>
+            <tr>
+              <td>kick_off  </td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>Long Time</td>
+            </tr>
+            <tr>
+              <td>match_week  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>home_team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>home_team  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>away_team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>away_team  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>home_score  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>away_score  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>stadium  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>referee  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 dim_calendario</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              11 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">dim_calendario</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\dim_calendario.csv&quot;),[Delimiter=&quot;;&quot;, Columns=10, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;Date&quot;, type date}, {&quot;Anio&quot;, Int64.Type}, {&quot;Mes_Numero&quot;, Int64.Type}, {&quot;Mes_Nombre&quot;, type text}, {&quot;Trimestre&quot;, type text}, {&quot;Semana_Anio&quot;, Int64.Type}, {&quot;Dia_Semana_Numero&quot;, Int64.Type}, {&quot;Dia_Semana_Nombre&quot;, type text}, {&quot;Es_Fin_De_Semana&quot;, Int64.Type}, {&quot;Temporada&quot;, type text}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Date  </td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>Long Date</td>
+            </tr>
+            <tr>
+              <td>Anio  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Mes_Numero  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Mes_Nombre  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Trimestre  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Semana_Anio  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Dia_Semana_Numero  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Dia_Semana_Nombre  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Es_Fin_De_Semana  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Temporada  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#553c9a">
+            <span>📋 LocalDateTable_fcd02b01-57ff-4ce4-a0ad-62efabac574f</span>
+            <span class="badge" style="background:#718096">Oculta</span><span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              8 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">LocalDateTable_fcd02b01-57ff-4ce4-a0ad-62efabac574f</code>
+                <span class="badge" style="background:#2d6a4f">calculated</span>
+              </summary>
+              <div class="mq-code">Calendar(Date(Year(MIN('dim_calendario'[Date])), 1, 1), Date(Year(MAX('dim_calendario'[Date])), 12, 31))</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Date  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>General Date</td>
+            </tr>
+            <tr>
+              <td>Año <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">YEAR([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>NroMes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">MONTH([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Mes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">FORMAT([Date], &quot;MMMM&quot;)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>NroTrimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">INT(([NroMes] + 2) / 3)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Trimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">&quot;Trim. &quot; &amp; [NroTrimestre]</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Día <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">DAY([Date])</td>
+              <td>0</td>
+            </tr></tbody></table>
+            <h4>🌲 Jerarquías</h4><p>Jerarquía de fechas</p>
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 dim_valoracion</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              7 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">dim_valoracion</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\dim_valoracion.csv&quot;),[Delimiter=&quot;;&quot;, Columns=6, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;player_id&quot;, Int64.Type}, {&quot;tm_player_id&quot;, Int64.Type}, {&quot;date&quot;, type date}, {&quot;market_value_in_eur&quot;, Int64.Type}, {&quot;current_club_name&quot;, type text}, {&quot;player_club_domestic_competition_id&quot;, type text}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>tm_player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>date  </td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>Long Date</td>
+            </tr>
+            <tr>
+              <td>market_value_in_eur  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>current_club_name  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>player_club_domestic_competition_id  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#553c9a">
+            <span>📋 LocalDateTable_9e71e827-f16c-403a-be2e-af34f14031b3</span>
+            <span class="badge" style="background:#718096">Oculta</span><span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              8 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">LocalDateTable_9e71e827-f16c-403a-be2e-af34f14031b3</code>
+                <span class="badge" style="background:#2d6a4f">calculated</span>
+              </summary>
+              <div class="mq-code">Calendar(Date(Year(MIN('dim_valoracion'[date])), 1, 1), Date(Year(MAX('dim_valoracion'[date])), 12, 31))</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Date  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>dateTime</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>General Date</td>
+            </tr>
+            <tr>
+              <td>Año <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">YEAR([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>NroMes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">MONTH([Date])</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Mes <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">FORMAT([Date], &quot;MMMM&quot;)</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>NroTrimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">INT(([NroMes] + 2) / 3)</td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>Trimestre <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">&quot;Trim. &quot; &amp; [NroTrimestre]</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Día <span class="badge" style="background:#c05621">Calculada</span> <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">DAY([Date])</td>
+              <td>0</td>
+            </tr></tbody></table>
+            <h4>🌲 Jerarquías</h4><p>Jerarquía de fechas</p>
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_ball_receipt</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              10 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_ball_receipt</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_ball_receipt.csv&quot;),[Delimiter=&quot;;&quot;, Columns=9, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}, {&quot;es_recepcion_exitosa&quot;, Int64.Type}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>es_recepcion_exitosa  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_carry</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              12 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_carry</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_carry.csv&quot;),[Delimiter=&quot;;&quot;, Columns=11, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}, {&quot;carry_end_x&quot;, type number}, {&quot;carry_end_y&quot;, type number}, {&quot;carry_distancia&quot;, type number}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>carry_end_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>carry_end_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>carry_distancia  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_dribble</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              10 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_dribble</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_dribble.csv&quot;),[Delimiter=&quot;;&quot;, Columns=9, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}, {&quot;es_dribble_exitoso&quot;, Int64.Type}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>es_dribble_exitoso  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_duel</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              11 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_duel</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_duel.csv&quot;),[Delimiter=&quot;;&quot;, Columns=10, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}, {&quot;duel_type&quot;, type text}, {&quot;es_duelo_ganado&quot;, Int64.Type}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>duel_type  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>es_duelo_ganado  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_interception</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              10 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_interception</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_interception.csv&quot;),[Delimiter=&quot;;&quot;, Columns=9, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}, {&quot;es_intercepcion_exitosa&quot;, Int64.Type}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>es_intercepcion_exitosa  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_minutes</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              9 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_minutes</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_minutes.csv&quot;),[Delimiter=&quot;;&quot;, Columns=8, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minuto_entrada&quot;, Int64.Type}, {&quot;minuto_salida&quot;, Int64.Type}, {&quot;minutos_jugados&quot;, Int64.Type}, {&quot;es_titular&quot;, Int64.Type}, {&quot;fue_sustituido&quot;, Int64.Type}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minuto_entrada  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minuto_salida  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minutos_jugados  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>es_titular  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>fue_sustituido  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_miscontrol</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              9 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_miscontrol</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_miscontrol.csv&quot;),[Delimiter=&quot;;&quot;, Columns=8, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_pass</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              21 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_pass</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_pass.csv&quot;),[Delimiter=&quot;;&quot;, Columns=19, Encoding=65001, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}, {&quot;pass_end_x&quot;, type number}, {&quot;pass_end_y&quot;, type number}, {&quot;pass_recipient&quot;, type text}, {&quot;pass_shot_assist&quot;, Int64.Type}, {&quot;pass_goal_assist&quot;, Int64.Type}, {&quot;pass_cross&quot;, Int64.Type}, {&quot;pass_switch&quot;, Int64.Type}, {&quot;pass_through_ball&quot;, Int64.Type}, {&quot;es_pase_completo&quot;, Int64.Type}, {&quot;es_asistencia_gol&quot;, Int64.Type}, {&quot;es_asistencia_tiro&quot;, Int64.Type}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>pass_end_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>pass_end_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>pass_recipient  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>pass_shot_assist  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>pass_goal_assist  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>pass_cross  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>pass_switch  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>pass_through_ball  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>es_pase_completo  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>es_asistencia_gol  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>es_asistencia_tiro  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>es_desmarque_ruptura <span class="badge" style="background:#c05621">Calculada</span> </td>
+              <td>boolean</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621">
+    fact_pass[es_pase_completo] = 1
+    &amp;&amp; fact_pass[pass_end_x] &gt; 80
+    &amp;&amp; (
+        fact_pass[pass_through_ball] = 1
+        || (fact_pass[pass_end_x] - fact_pass[location_x]) &gt;= 15
+    )</td>
+              <td>&quot;TRUE&quot;;&quot;TRUE&quot;;&quot;FALSE&quot;</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_pressure</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              9 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_pressure</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_pressure.csv&quot;),[Delimiter=&quot;;&quot;, Columns=8, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 fact_shot</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              13 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">fact_shot</code>
+                <span class="badge" style="background:#2d6a4f">m</span>
+              </summary>
+              <div class="mq-code">let
+    Origen = Csv.Document(File.Contents(&quot;D:\proyectos\scouting-futbol\output\scouting_v12_output\fact_shot.csv&quot;),[Delimiter=&quot;;&quot;, Columns=12, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+    #&quot;Encabezados promovidos&quot; = Table.PromoteHeaders(Origen, [PromoteAllScalars=true]),
+    #&quot;Tipo cambiado&quot; = Table.TransformColumnTypes(#&quot;Encabezados promovidos&quot;,{{&quot;match_id&quot;, Int64.Type}, {&quot;player_id&quot;, Int64.Type}, {&quot;team_id&quot;, Int64.Type}, {&quot;minute&quot;, Int64.Type}, {&quot;location_x&quot;, type number}, {&quot;location_y&quot;, type number}, {&quot;under_pressure&quot;, Int64.Type}, {&quot;position&quot;, type text}, {&quot;shot_statsbomb_xg&quot;, type number}, {&quot;shot_type&quot;, type text}, {&quot;es_gol&quot;, Int64.Type}, {&quot;es_al_arco&quot;, Int64.Type}})
+in
+    #&quot;Tipo cambiado&quot;</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>match_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>player_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>team_id  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>minute  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>location_x  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>location_y  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>under_pressure  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>position  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>shot_statsbomb_xg  </td>
+              <td>double</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>shot_type  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>es_gol  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr>
+            <tr>
+              <td>es_al_arco  </td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td>0</td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 dim_metricas_1</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              3 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">dim_metricas_1</code>
+                <span class="badge" style="background:#2d6a4f">calculated</span>
+              </summary>
+              <div class="mq-code">
+DATATABLE(
+    &quot;Generales&quot;, STRING,
+    &quot;Mediocampo&quot;, STRING,
+    {
+        {&quot;Desmarques p90&quot;,   &quot;Pases Prog p90&quot;},
+        {&quot;Presiones p90&quot;,    &quot;Ratio Pases Prog&quot;},
+        {&quot;xG Sin Penal p90&quot;, &quot;Conducciones Prog p90&quot;},
+        {&quot;Recepciones p90&quot;,  &quot;Pases Bajo Presion p90&quot;},
+        {&quot;Dribbles p90&quot;,     &quot;Perdidas p90&quot;}
+    }
+)</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Delanteros  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Mediocampo  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+        <details class="bloque">
+          <summary style="background:#2c5282">
+            <span>📋 dim_metricas_2</span>
+            <span class="badge" style="background:#4a5568">import</span>
+            <span class="summary-counts">
+              3 cols · 0 medidas · 1 M queries
+            </span>
+          </summary>
+          <div class="body">
+            <h4>⚙️ Power Query (M)</h4>
+            <details style="margin:.5rem 0">
+              <summary style="cursor:pointer;padding:.3rem .5rem;background:#2d3748;color:#e2e8f0;border-radius:4px">
+                🔧 Power Query — partición <code style="color:#b5f5ec">dim_metricas_2</code>
+                <span class="badge" style="background:#2d6a4f">calculated</span>
+              </summary>
+              <div class="mq-code">
+DATATABLE(
+    &quot;Defensivos&quot;, STRING,
+    &quot;Laterales&quot;, STRING,
+    {
+        {&quot;Duelos Zona Alta p90&quot;,  &quot;Duelos Def p90&quot;},
+        {&quot;Intercepciones CR p90&quot;, &quot;Conducciones Centro p90&quot;},
+        {&quot;Pases Prog Atras p90&quot;,  &quot;Pases Adentro p90&quot;},
+        {&quot;Carrys Zona Media p90&quot;, &quot;Presiones Banda p90&quot;}
+    }
+)</div>
+            </details>
+            
+            <h4>🏛️ Columnas</h4><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Expresión</th><th>Formato</th></tr></thead><tbody>
+            <tr>
+              <td>RowNumber-2662979B-1795-4F74-8F37-6A1BA8059B61  <span class="badge" style="background:#718096">Oculta</span></td>
+              <td>int64</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Defensivos  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Laterales  </td>
+              <td>string</td>
+              <td style="font-family:monospace;font-size:11px;color:#c05621"></td>
+              <td></td>
+            </tr></tbody></table>
+            
+          </div>
+        </details>
+</section>
+<section id="relaciones">
+  <h2>🔗 Relaciones entre tablas</h2>
+  <table><thead><tr>
+        <th>Tabla origen</th><th>Col. origen</th><th></th>
+        <th>Tabla destino</th><th>Col. destino</th>
+        <th>Filtro cruzado</th><th>Activa</th>
+      </tr></thead><tbody>
+        <tr>
+          <td><strong>dim_jugador</strong></td>
+          <td>date_of_birth</td><td>→</td>
+          <td><strong>LocalDateTable_e5597772-8bef-42e2-9c8a-3477167d46e7</strong></td>
+          <td>Date</td>
+          <td>datePartOnly</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>dim_calendario</strong></td>
+          <td>Date</td><td>→</td>
+          <td><strong>LocalDateTable_fcd02b01-57ff-4ce4-a0ad-62efabac574f</strong></td>
+          <td>Date</td>
+          <td>datePartOnly</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>dim_valoracion</strong></td>
+          <td>date</td><td>→</td>
+          <td><strong>LocalDateTable_9e71e827-f16c-403a-be2e-af34f14031b3</strong></td>
+          <td>Date</td>
+          <td>datePartOnly</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>dim_valoracion</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>bothDirections</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_ball_receipt</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_carry</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_dribble</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_duel</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_interception</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_minutes</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_miscontrol</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_pass</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_pressure</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_shot</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_ball_receipt</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_carry</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_dribble</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_duel</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_interception</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_minutes</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_miscontrol</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_pass</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_pressure</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_shot</strong></td>
+          <td>match_id</td><td>→</td>
+          <td><strong>dim_partido</strong></td>
+          <td>match_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>dim_partido</strong></td>
+          <td>match_date</td><td>→</td>
+          <td><strong>dim_calendario</strong></td>
+          <td>Date</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>fact_heatmap_jugador</strong></td>
+          <td>player_id</td><td>→</td>
+          <td><strong>dim_jugador</strong></td>
+          <td>player_id</td>
+          <td>singleDirection</td>
+          <td>✅</td>
+        </tr></tbody></table>
+</section>
+<section id="reporte">
+  <h2>📄 Páginas del reporte y visuales</h2>
+  
+        <details class="bloque" open>
+          <summary style="background:#2c5282">
+            <span>📄 jugadores</span>
+            
+            <span class="summary-counts">7 visuales · 1280×720</span>
+          </summary>
+          <div class="body">
+            
+            <table>
+              <thead><tr><th>Tipo</th><th>Título</th><th>Posición/Tamaño</th><th>Campos</th><th>Script</th></tr></thead>
+              <tbody>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Forma</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:0 y:0<br>1280×74</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Cuadro de texto</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:132 y:0<br>955×74</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Botón de acción</span></td>
+              <td>Detalles</td>
+              <td style="font-size:11px;color:#666">x:1140 y:0<br>94×74</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Segmentador</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:0 y:74<br>904×146</td>
+              <td style="font-size:11px">dim_posicion.posicion</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Segmentador</span></td>
+              <td>selector de valor de mercado</td>
+              <td style="font-size:11px;color:#666">x:904 y:74<br>189×146</td>
+              <td style="font-size:11px">dim_jugador.market_value_in_eur</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Segmentador</span></td>
+              <td>selector de edad</td>
+              <td style="font-size:11px;color:#666">x:1093 y:74<br>187×146</td>
+              <td style="font-size:11px">dim_jugador.Edad en 2020</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Tabla</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:0 y:220<br>1280×500</td>
+              <td style="font-size:11px">dim_jugador.player<br>medidas.Score Unificado<br>medidas.Score Unificado por Millon<br>Sum(dim_jugador.Edad en 2020)<br>dim_jugador.posicion_habitual<br>medidas.Valor de Mercado Actual<br>dim_jugador.player_id</td>
+              <td style="font-size:11px"></td>
+            </tr></tbody>
+            </table>
+          </div>
+        </details>
+        <details class="bloque" open>
+          <summary style="background:#2c5282">
+            <span>📄 detalle</span>
+            <span class="badge" style="background:#2d6a4f">🐍 2 Python</span>
+            <span class="summary-counts">17 visuales · 1280×720</span>
+          </summary>
+          <div class="body">
+            <details><summary>🔍 Filtros de página (1)</summary><ul><li><code>{&quot;name&quot;: &quot;87fcd898b701d40a802d&quot;, &quot;expression&quot;: {&quot;Column&quot;: {&quot;Expression&quot;: {&quot;SourceRef&quot;: {&quot;Entity&quot;: &quot;dim_jugador&quot;}}, &quot;Property&quot;: &quot;player&quot;}}, &quot;filter&quot;: {</code></li></ul></details>
+            <table>
+              <thead><tr><th>Tipo</th><th>Título</th><th>Posición/Tamaño</th><th>Campos</th><th>Script</th></tr></thead>
+              <tbody>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Botón de acción</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:0 y:0<br>100×40</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Forma</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:50 y:0<br>482×77</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:531 y:0<br>749×77</td>
+              <td style="font-size:11px">Min(dim_jugador.player)</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Cuadro de texto</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:56 y:6<br>467×66</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:50 y:77<br>482×87</td>
+              <td style="font-size:11px">Min(dim_posicion.posicion)</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:531 y:77<br>256×87</td>
+              <td style="font-size:11px">Min(dim_jugador.country)</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:787 y:77<br>493×87</td>
+              <td style="font-size:11px">Min(dim_valoracion.current_club_name)</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:963 y:175<br>139×105</td>
+              <td style="font-size:11px">medidas.Metrica Card 4</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td>altura (cm)</td>
+              <td style="font-size:11px;color:#666">x:43 y:176<br>114×102</td>
+              <td style="font-size:11px">Sum(dim_jugador.height_in_cm)</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td>edad</td>
+              <td style="font-size:11px;color:#666">x:184 y:176<br>95×102</td>
+              <td style="font-size:11px">Sum(dim_jugador.Edad en 2017)</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td>minutos jugados</td>
+              <td style="font-size:11px;color:#666">x:311 y:176<br>136×102</td>
+              <td style="font-size:11px">medidas.Minutos Jugados</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:502 y:176<br>138×103</td>
+              <td style="font-size:11px">medidas.Metrica Card 1</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:650 y:176<br>138×103</td>
+              <td style="font-size:11px">medidas.Metrica Card 2</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:805 y:176<br>138×103</td>
+              <td style="font-size:11px">medidas.Metrica Card 3</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:1119 y:176<br>131×103</td>
+              <td style="font-size:11px">medidas.Metrica Card 5</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#276749">Python</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:39 y:227<br>546×493</td>
+              <td style="font-size:11px">medidas.Valor Dinámico Radar<br>medidas.Posicion Seleccionada Texto<br>medidas.Valor Dinámico Mediana<br>dim_metricas.metrica</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#276749">Python</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:610 y:314<br>666×394</td>
+              <td style="font-size:11px">Sum(fact_heatmap_jugador.location_x)<br>Sum(fact_heatmap_jugador.location_y)<br>fact_heatmap_jugador.tipo</td>
+              <td style="font-size:11px"></td>
+            </tr></tbody>
+            </table>
+          </div>
+        </details>
+        <details class="bloque" open>
+          <summary style="background:#2c5282">
+            <span>📄 evolución valor</span>
+            
+            <span class="summary-counts">7 visuales · 1280×720</span>
+          </summary>
+          <div class="body">
+            <details><summary>🔍 Filtros de página (1)</summary><ul><li><code>{&quot;name&quot;: &quot;caf3fa51a6708a5d1270&quot;, &quot;expression&quot;: {&quot;Column&quot;: {&quot;Expression&quot;: {&quot;SourceRef&quot;: {&quot;Entity&quot;: &quot;dim_jugador&quot;}}, &quot;Property&quot;: &quot;player&quot;}}, &quot;filter&quot;: {</code></li></ul></details>
+            <table>
+              <thead><tr><th>Tipo</th><th>Título</th><th>Posición/Tamaño</th><th>Campos</th><th>Script</th></tr></thead>
+              <tbody>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Forma</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:0 y:0<br>1280×87</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Botón de acción</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:0 y:0<br>100×40</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">cardVisual</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:531 y:4<br>749×77</td>
+              <td style="font-size:11px">Min(dim_jugador.player)</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Cuadro de texto</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:49 y:11<br>467×65</td>
+              <td style="font-size:11px"></td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Línea</span></td>
+              <td>Valor Mercado por Año</td>
+              <td style="font-size:11px;color:#666">x:0 y:86<br>1280×202</td>
+              <td style="font-size:11px">medidas.Valor Mercado por Temporada<br>dim_calendario.Anio</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Línea</span></td>
+              <td>minutos jugados por temporada</td>
+              <td style="font-size:11px;color:#666">x:0 y:288<br>1280×202</td>
+              <td style="font-size:11px">medidas.Minutos Jugados<br>dim_calendario.Anio</td>
+              <td style="font-size:11px"></td>
+            </tr>
+            <tr>
+              <td><span class="badge" style="background:#2c5282">Tabla</span></td>
+              <td><em style='color:#aaa'>Sin título</em></td>
+              <td style="font-size:11px;color:#666">x:0 y:490<br>265×202</td>
+              <td style="font-size:11px">dim_valoracion.current_club_name<br>dim_calendario.Date.Variación.Jerarquía de fechas.Año</td>
+              <td style="font-size:11px"></td>
+            </tr></tbody>
+            </table>
+          </div>
+        </details>
+</section>
+<section id="uso">
+  <h2>🔍 Uso de campos en el reporte</h2>
+  <table><thead><tr><th>Campo / Medida</th><th>Páginas donde se usa</th></tr></thead><tbody><tr><td><code>Min(dim_jugador.country)</code></td><td>detalle</td></tr><tr><td><code>Min(dim_jugador.player)</code></td><td>detalle, evolución valor</td></tr><tr><td><code>Min(dim_posicion.posicion)</code></td><td>detalle</td></tr><tr><td><code>Min(dim_valoracion.current_club_name)</code></td><td>detalle</td></tr><tr><td><code>Sum(dim_jugador.Edad en 2017)</code></td><td>detalle</td></tr><tr><td><code>Sum(dim_jugador.Edad en 2020)</code></td><td>jugadores</td></tr><tr><td><code>Sum(dim_jugador.height_in_cm)</code></td><td>detalle</td></tr><tr><td><code>Sum(fact_heatmap_jugador.location_x)</code></td><td>detalle</td></tr><tr><td><code>Sum(fact_heatmap_jugador.location_y)</code></td><td>detalle</td></tr><tr><td><code>dim_calendario.Anio</code></td><td>evolución valor</td></tr><tr><td><code>dim_calendario.Date.Variación.Jerarquía de fechas.Año</code></td><td>evolución valor</td></tr><tr><td><code>dim_jugador.Edad en 2020</code></td><td>jugadores</td></tr><tr><td><code>dim_jugador.market_value_in_eur</code></td><td>jugadores</td></tr><tr><td><code>dim_jugador.player</code></td><td>jugadores</td></tr><tr><td><code>dim_jugador.player_id</code></td><td>jugadores</td></tr><tr><td><code>dim_jugador.posicion_habitual</code></td><td>jugadores</td></tr><tr><td><code>dim_metricas.metrica</code></td><td>detalle</td></tr><tr><td><code>dim_posicion.posicion</code></td><td>jugadores</td></tr><tr><td><code>dim_valoracion.current_club_name</code></td><td>evolución valor</td></tr><tr><td><code>fact_heatmap_jugador.tipo</code></td><td>detalle</td></tr><tr><td><code>medidas.Metrica Card 1</code></td><td>detalle</td></tr><tr><td><code>medidas.Metrica Card 2</code></td><td>detalle</td></tr><tr><td><code>medidas.Metrica Card 3</code></td><td>detalle</td></tr><tr><td><code>medidas.Metrica Card 4</code></td><td>detalle</td></tr><tr><td><code>medidas.Metrica Card 5</code></td><td>detalle</td></tr><tr><td><code>medidas.Minutos Jugados</code></td><td>detalle, evolución valor</td></tr><tr><td><code>medidas.Posicion Seleccionada Texto</code></td><td>detalle</td></tr><tr><td><code>medidas.Score Unificado</code></td><td>jugadores</td></tr><tr><td><code>medidas.Score Unificado por Millon</code></td><td>jugadores</td></tr><tr><td><code>medidas.Valor Dinámico Mediana</code></td><td>detalle</td></tr><tr><td><code>medidas.Valor Dinámico Radar</code></td><td>detalle</td></tr><tr><td><code>medidas.Valor Mercado por Temporada</code></td><td>evolución valor</td></tr><tr><td><code>medidas.Valor de Mercado Actual</code></td><td>jugadores</td></tr></tbody></table><h4>⚠️ Medidas definidas pero no usadas en el reporte</h4><ul><li><code>medidas.Total Pases</code></li><li><code>medidas.score_d por millón de eur</code></li><li><code>medidas.score_def por millón de eur</code></li><li><code>medidas.score_lat por millón de eur</code></li><li><code>medidas.score_m por millón de eur</code></li><li><code>medidas_def.Carrys Progresivos Zona Media</code></li><li><code>medidas_def.Carrys Zona Media por 90</code></li><li><code>medidas_def.Duelos Zona Alta</code></li><li><code>medidas_def.Duelos Zona Alta por 90</code></li><li><code>medidas_def.Intercepciones CR por 90</code></li><li><code>medidas_def.Intercepciones Campo Rival</code></li><li><code>medidas_def.Pases Prog Atras por 90</code></li><li><code>medidas_def.Pases Prog Desde Atras</code></li><li><code>medidas_def.Pct Carrys Zona Media</code></li><li><code>medidas_def.Pct Duelos Zona Alta</code></li><li><code>medidas_def.Pct Intercepciones CR</code></li><li><code>medidas_def.Pct Pases Prog Atras</code></li><li><code>medidas_def.Score Defensor</code></li><li><code>medidas_def.Valor Dinámico Jugador Def</code></li><li><code>medidas_del.Desmarques por 90</code></li><li><code>medidas_del.Dribbles</code></li><li><code>medidas_del.Dribbles por 90</code></li><li><code>medidas_del.Pct Desmarques</code></li><li><code>medidas_del.Pct Dribbles</code></li><li><code>medidas_del.Pct Presiones</code></li><li><code>medidas_del.Pct Recepciones</code></li><li><code>medidas_del.Pct xG</code></li><li><code>medidas_del.Presiones Ultimo Tercio</code></li><li><code>medidas_del.Presiones por 90</code></li><li><code>medidas_del.Recepciones Campo Rival</code></li><li><code>medidas_del.Recepciones por 90</code></li><li><code>medidas_del.Score Delantero</code></li><li><code>medidas_del.Total Desmarques Ruptura</code></li><li><code>medidas_del.Valor Dinámico Jugador</code></li><li><code>medidas_del.xG Sin Penal</code></li><li><code>medidas_del.xG Sin Penal por 90</code></li><li><code>medidas_lat.Conducciones Centro por 90</code></li><li><code>medidas_lat.Conducciones Hacia Centro</code></li><li><code>medidas_lat.Duelos Def por 90</code></li><li><code>medidas_lat.Duelos Defensivos Ganados</code></li><li><code>medidas_lat.Pases Adentro por 90</code></li><li><code>medidas_lat.Pases Hacia Adentro</code></li><li><code>medidas_lat.Pct Conducciones Centro</code></li><li><code>medidas_lat.Pct Duelos Def</code></li><li><code>medidas_lat.Pct Pases Adentro</code></li><li><code>medidas_lat.Pct Presiones Banda</code></li><li><code>medidas_lat.Presiones Banda por 90</code></li><li><code>medidas_lat.Presiones En Banda</code></li><li><code>medidas_lat.Score Lateral</code></li><li><code>medidas_lat.Valor Dinámico Jugador Lat</code></li><li><code>medidas_mid.Conducciones Prog por 90</code></li><li><code>medidas_mid.Conducciones Progresivas</code></li><li><code>medidas_mid.Pases Bajo Presion por 90</code></li><li><code>medidas_mid.Pases Exitosos Bajo Presion</code></li><li><code>medidas_mid.Pases Prog por 90</code></li><li><code>medidas_mid.Pases Progresivos</code></li><li><code>medidas_mid.Pct Conducciones Prog</code></li><li><code>medidas_mid.Pct Pases Bajo Presion</code></li><li><code>medidas_mid.Pct Pases Prog</code></li><li><code>medidas_mid.Pct Perdidas</code></li><li><code>medidas_mid.Pct Ratio Pases Prog</code></li><li><code>medidas_mid.Perdidas de Balon</code></li><li><code>medidas_mid.Perdidas por 90</code></li><li><code>medidas_mid.Ratio Pases Prog</code></li><li><code>medidas_mid.Score Mediocampista</code></li><li><code>medidas_mid.Valor Dinámico Jugador Mid</code></li></ul>
+</section>
+<section id="visuales">
+  <h2>👁️ Distribución de tipos de visuales</h2>
+  <table><thead><tr><th>Tipo de visual</th><th>Cantidad</th></tr></thead><tbody><tr><td>cardVisual</td><td>13</td></tr><tr><td>Forma</td><td>3</td></tr><tr><td>Cuadro de texto</td><td>3</td></tr><tr><td>Segmentador</td><td>3</td></tr><tr><td>Botón de acción</td><td>3</td></tr><tr><td>Tabla</td><td>2</td></tr><tr><td>Python</td><td>2</td></tr><tr><td>Línea</td><td>2</td></tr></tbody></table>
+</section>
+<section id="roles">
+  <h2>🔒 Seguridad a nivel de fila (RLS)</h2>
+  <p><em>No se encontraron roles de seguridad (RLS).</em></p>
+</section>
+<section id="auxiliares">
+  <h2>🔧 Posibles tablas auxiliares / de soporte</h2>
+  <ul><li>DateTableTemplate_d9a2e886-9150-4f60-97bf-8674314b2d71</li><li>LocalDateTable_e5597772-8bef-42e2-9c8a-3477167d46e7</li><li>LocalDateTable_fcd02b01-57ff-4ce4-a0ad-62efabac574f</li><li>LocalDateTable_9e71e827-f16c-403a-be2e-af34f14031b3</li></ul>
+</section>
+<section id="archivos">
+  <h2>📦 Archivos internos del .pbix</h2>
+  <ul style='columns:3;font-size:12px'><li>DataModel</li><li>DiagramLayout</li><li>Metadata</li><li>Report/Layout</li><li>Report/LinguisticSchema</li><li>Report/StaticResources/SharedResources/BaseThemes/CY26SU05.json</li><li>Report/StaticResources/SharedResources/BuiltInThemes/AccessibleNeutral.json</li><li>SecurityBindings</li><li>Settings</li><li>Version</li><li>[Content_Types].xml</li></ul>
+</section>
+</main>
+<footer>Generado por pbix-reader v0.2.0 · 19/06/2026 15:58</footer>
+</body>
+</html>
